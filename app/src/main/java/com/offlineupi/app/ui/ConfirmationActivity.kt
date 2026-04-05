@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Toast
@@ -17,7 +18,9 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.offlineupi.app.R
+import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.model.UpiPaymentData
 import com.offlineupi.app.viewmodel.ConfirmationViewModel
@@ -120,18 +123,52 @@ class ConfirmationActivity : AppCompatActivity() {
             viewModel.validateAndGetAmount(binding.etAmount.text.toString()) ?: return
         }
 
-        // Copy UPI ID to clipboard so user can paste it in the USSD session
+        // Copy UPI ID to clipboard as fallback
         copyToClipboard(data.payeeAddress)
 
         // Store pending values for the permission callback
         pendingPayeeAddress = data.payeeAddress
         pendingAmount       = finalAmount
 
+        // Set pending payment for auto-fill accessibility service
+        UssdAccessibilityService.setPendingPayment(data.payeeAddress, finalAmount)
+
+        if (!isAccessibilityServiceEnabled()) {
+            promptEnableAccessibility(data.payeeAddress, finalAmount)
+        } else {
+            proceedWithDial(data.payeeAddress, finalAmount)
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val service = "$packageName/${UssdAccessibilityService::class.java.canonicalName}"
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabledServices.contains(service)
+    }
+
+    private fun promptEnableAccessibility(payeeAddress: String, amount: String?) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.accessibility_prompt_title))
+            .setMessage(getString(R.string.accessibility_prompt_message))
+            .setPositiveButton(getString(R.string.accessibility_prompt_enable)) { _, _ ->
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            .setNegativeButton(getString(R.string.accessibility_prompt_skip)) { _, _ ->
+                proceedWithDial(payeeAddress, amount)
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun proceedWithDial(payeeAddress: String, amount: String?) {
         // Check / request CALL_PHONE and dial *99#
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            navigateToUssdInstructions(data.payeeAddress, finalAmount)
+            navigateToUssdInstructions(payeeAddress, amount)
             dialUssd99()
         } else {
             callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
