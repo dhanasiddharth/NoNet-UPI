@@ -39,6 +39,10 @@ class UssdAccessibilityService : AccessibilityService() {
         const val STEP_AMOUNT_ENTERED = 4
         const val STEP_REMARKS_SKIPPED = 5
         const val STEP_PIN_PROMPT = 6
+        const val STEP_RESULT_SUCCESS = 7
+        const val STEP_RESULT_FAILURE = 8
+
+        const val EXTRA_RESULT_TEXT = "extra_result_text"
 
         @Volatile var pendingVpa: String? = null
             private set
@@ -67,6 +71,7 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     private var lastRespondedMessage: String? = null
+    private var awaitingResult = false
 
     private val TAG = "UssdAutoFill"
 
@@ -74,7 +79,7 @@ class UssdAccessibilityService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: "null"
         Log.d(TAG, "Event: type=${event.eventType} pkg=$pkg hasPending=${hasPending()}")
 
-        if (!hasPending()) return
+        if (!hasPending() && !awaitingResult) return
 
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -144,18 +149,36 @@ class UssdAccessibilityService : AccessibilityService() {
 
         val lower = messageText.lowercase()
 
-        // NEVER auto-fill PIN
+        // NEVER auto-fill PIN — but start awaiting the result
         if (isPinEntryPrompt(lower)) {
             broadcastStep(STEP_PIN_PROMPT, "Enter UPI PIN")
             clearPending()
+            awaitingResult = true
             lastRespondedMessage = null
             return
         }
 
-        // If there's no EditText, this is an info dialog (e.g. "Welcome to *99#").
+        // If there's no EditText, this is an info dialog.
         val editText = findNodeByClass(root, "android.widget.EditText")
         if (editText == null) {
             Log.d(TAG, "No EditText found, looking for OK button")
+
+            // If awaiting result after PIN, this is the transaction result dialog
+            if (awaitingResult) {
+                val resultStep = parseTransactionResult(lower)
+                val resultText = messageText.trim()
+                Log.d(TAG, "Transaction result: step=$resultStep text=${resultText.take(100)}")
+                broadcastStep(resultStep, resultText)
+                awaitingResult = false
+                // Dismiss the result dialog
+                val okButton = findButtonByText(root, "ok")
+                if (okButton != null) {
+                    okButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                lastRespondedMessage = messageText
+                return
+            }
+
             val okButton = findButtonByText(root, "ok")
             if (okButton != null) {
                 Log.d(TAG, "Clicking OK button")
@@ -207,7 +230,33 @@ class UssdAccessibilityService : AccessibilityService() {
             setPackage(packageName)
             putExtra(EXTRA_STEP, step)
             putExtra(EXTRA_STEP_LABEL, label)
+            if (step == STEP_RESULT_SUCCESS || step == STEP_RESULT_FAILURE) {
+                putExtra(EXTRA_RESULT_TEXT, label)
+            }
         })
+    }
+
+    /**
+     * Parses the transaction result dialog text to determine success or failure.
+     */
+    private fun parseTransactionResult(message: String): Int {
+        val successKeywords = listOf(
+            "successful", "success", "completed", "accepted",
+            "txn id", "transaction id", "ref no", "reference"
+        )
+        val failureKeywords = listOf(
+            "failed", "failure", "declined", "rejected", "unable",
+            "insufficient", "expired", "timeout", "timed out", "error"
+        )
+
+        for (keyword in successKeywords) {
+            if (message.contains(keyword)) return STEP_RESULT_SUCCESS
+        }
+        for (keyword in failureKeywords) {
+            if (message.contains(keyword)) return STEP_RESULT_FAILURE
+        }
+        // Default to success if we can't determine — the user will see the raw text
+        return STEP_RESULT_SUCCESS
     }
 
     private fun stepLabel(step: Int, response: String): String = when (step) {
@@ -311,12 +360,14 @@ class UssdAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         clearPending()
+        awaitingResult = false
         lastRespondedMessage = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
         clearPending()
+        awaitingResult = false
         lastRespondedMessage = null
     }
 }

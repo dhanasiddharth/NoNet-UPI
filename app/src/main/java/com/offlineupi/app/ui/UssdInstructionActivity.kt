@@ -38,7 +38,8 @@ class UssdInstructionActivity : AppCompatActivity() {
     private val stepReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val step = intent.getIntExtra(UssdAccessibilityService.EXTRA_STEP, -1)
-            onStepCompleted(step)
+            val resultText = intent.getStringExtra(UssdAccessibilityService.EXTRA_RESULT_TEXT)
+            onStepCompleted(step, resultText)
         }
     }
 
@@ -118,10 +119,9 @@ class UssdInstructionActivity : AppCompatActivity() {
         binding.tvSecurityNote.text = getString(R.string.ussd_security_note)
     }
 
-    private fun onStepCompleted(step: Int) {
+    private fun onStepCompleted(step: Int, resultText: String? = null) {
         when (step) {
             UssdAccessibilityService.STEP_WELCOME -> {
-                // Welcome dismissed — no visible step for this, but mark step 1 as active
                 setStepActive(binding.tvStep1Status)
             }
             UssdAccessibilityService.STEP_SEND_MONEY -> {
@@ -146,7 +146,6 @@ class UssdInstructionActivity : AppCompatActivity() {
                 binding.tvStep5.text = getString(R.string.ussd_step5_ready)
             }
             UssdAccessibilityService.STEP_REMARKS_SKIPPED -> {
-                // All auto steps done, PIN is next
                 setStepActive(binding.tvStep5Status)
                 binding.tvStep5.text = getString(R.string.ussd_step5_ready)
                 binding.tvUssdSubtitle.text = "Auto-fill complete. Enter your UPI PIN to finish."
@@ -155,6 +154,49 @@ class UssdInstructionActivity : AppCompatActivity() {
                 setStepActive(binding.tvStep5Status)
                 binding.tvStep5.text = getString(R.string.ussd_step5_ready)
                 binding.tvUssdSubtitle.text = "Enter your UPI PIN to complete the payment."
+            }
+            UssdAccessibilityService.STEP_RESULT_SUCCESS -> {
+                setStepDone(binding.tvStep5Status)
+                binding.tvStep5.text = "UPI PIN entered"
+                showResult(true, resultText)
+            }
+            UssdAccessibilityService.STEP_RESULT_FAILURE -> {
+                setStepDone(binding.tvStep5Status)
+                binding.tvStep5.text = "UPI PIN entered"
+                showResult(false, resultText)
+            }
+        }
+    }
+
+    private fun showResult(success: Boolean, rawText: String?) {
+        binding.dividerResult.visibility = View.VISIBLE
+        binding.layoutResult.visibility = View.VISIBLE
+
+        if (success) {
+            binding.tvResultStatus.text = "\u2713"
+            binding.tvResultStatus.setBackgroundResource(R.drawable.bg_step_done)
+            binding.tvResultStatus.setTextColor(getColor(R.color.white))
+            binding.tvResult.text = getString(R.string.ussd_result_success)
+            binding.tvResult.setTextColor(getColor(R.color.accent_green))
+            binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_success)
+        } else {
+            binding.tvResultStatus.text = "!"
+            binding.tvResultStatus.setBackgroundResource(R.drawable.bg_step_active)
+            binding.tvResultStatus.setTextColor(getColor(R.color.white))
+            binding.tvResult.text = getString(R.string.ussd_result_failure)
+            binding.tvResult.setTextColor(getColor(R.color.accent_amber))
+            binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_failure)
+        }
+
+        // Show the raw USSD response text for reference
+        if (!rawText.isNullOrBlank()) {
+            // Clean up: remove button text like "OK" from the raw text
+            val cleaned = rawText.lines()
+                .filter { it.trim().lowercase() != "ok" && it.trim().lowercase() != "cancel" }
+                .joinToString("\n").trim()
+            if (cleaned.isNotBlank()) {
+                binding.tvResultDetails.text = cleaned
+                binding.tvResultDetails.visibility = View.VISIBLE
             }
         }
     }

@@ -51,6 +51,10 @@
     <string name="ussd_step4_no_amount">Enter the payment amount</string>
     <string name="ussd_step5_pending">Enter your UPI PIN to confirm</string>
     <string name="ussd_step5_ready">Enter your UPI PIN now</string>
+    <string name="ussd_result_success">Payment successful</string>
+    <string name="ussd_result_failure">Payment failed</string>
+    <string name="ussd_subtitle_success">Payment completed successfully.</string>
+    <string name="ussd_subtitle_failure">Payment was not successful. Please try again.</string>
     <string name="ussd_clipboard_copied_badge">UPI ID copied to clipboard</string>
     <string name="ussd_sms_disclaimer">📱 Transaction confirmation will be received via SMS from your bank. This app does not verify or track transactions.</string>
     <string name="ussd_security_note">This app does not replace official UPI apps. No payment data is stored.</string>
