@@ -1,9 +1,11 @@
 package com.offlineupi.app.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -11,17 +13,33 @@ import android.view.accessibility.AccessibilityNodeInfo
  * Accessibility service that auto-fills USSD (*99#) payment prompts.
  *
  * Navigates the interactive USSD menu automatically:
+ *   Step 0: Welcome dialog → dismiss (click OK)
  *   Step 1: Main menu → select "Send Money" (option 1)
- *   Step 2: Payment method → select "UPI ID" (option number varies)
+ *   Step 2: Payment method → select "UPI ID" (option 3)
  *   Step 3: Enter beneficiary VPA
  *   Step 4: Enter amount
  *   Step 5: Remarks → skip (option 1)
  *
  * SECURITY: UPI PIN is NEVER auto-filled, the user must enter it manually.
+ *
+ * Broadcasts step completion via ACTION_STEP_COMPLETED so the instruction
+ * screen can show real-time progress.
  */
 class UssdAccessibilityService : AccessibilityService() {
 
     companion object {
+        const val ACTION_STEP_COMPLETED = "com.offlineupi.app.USSD_STEP_COMPLETED"
+        const val EXTRA_STEP = "extra_step"
+        const val EXTRA_STEP_LABEL = "extra_step_label"
+
+        const val STEP_WELCOME = 0
+        const val STEP_SEND_MONEY = 1
+        const val STEP_UPI_ID_SELECTED = 2
+        const val STEP_VPA_ENTERED = 3
+        const val STEP_AMOUNT_ENTERED = 4
+        const val STEP_REMARKS_SKIPPED = 5
+        const val STEP_PIN_PROMPT = 6
+
         @Volatile var pendingVpa: String? = null
             private set
         @Volatile var pendingAmount: String? = null
@@ -33,7 +51,6 @@ class UssdAccessibilityService : AccessibilityService() {
         fun setPendingPayment(vpa: String, amount: String?) {
             pendingVpa = vpa
             pendingAmount = amount
-            // Auto-clear after 5 minutes to avoid stale data
             timeoutRunnable?.let { handler.removeCallbacks(it) }
             timeoutRunnable = Runnable { clearPending() }
             handler.postDelayed(timeoutRunnable!!, 5 * 60 * 1000L)
@@ -49,19 +66,32 @@ class UssdAccessibilityService : AccessibilityService() {
         fun hasPending(): Boolean = pendingVpa != null
     }
 
-    /** Tracks the last dialog message we responded to, to avoid double-sending. */
     private var lastRespondedMessage: String? = null
 
+    private val TAG = "UssdAutoFill"
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: "null"
+        Log.d(TAG, "Event: type=${event.eventType} pkg=$pkg hasPending=${hasPending()}")
+
         if (!hasPending()) return
 
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
 
-        val pkg = event.packageName?.toString() ?: return
-        if (!isUssdPackage(pkg)) return
+        if (!isUssdPackage(pkg)) {
+            Log.d(TAG, "Skipping non-USSD package: $pkg")
+            return
+        }
 
-        val root = rootInActiveWindow ?: return
+        // Find the USSD dialog window from com.android.phone (not our app's window)
+        val root = findUssdWindowRoot()
+        if (root == null) {
+            Log.d(TAG, "No USSD window found, skipping")
+            return
+        }
+        val rootPkg = root.packageName?.toString() ?: "unknown"
+        Log.d(TAG, "Using root from package: $rootPkg")
         try {
             handleUssdDialog(root)
         } finally {
@@ -69,45 +99,80 @@ class UssdAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Iterates over all windows to find the one belonging to the phone/dialer app.
+     * This ensures we read text from the USSD dialog, not from our own app behind it.
+     */
+    private fun findUssdWindowRoot(): AccessibilityNodeInfo? {
+        try {
+            Log.d(TAG, "Searching ${windows.size} windows")
+            for (window in windows) {
+                val root = window.root ?: continue
+                val pkg = root.packageName?.toString()
+                Log.d(TAG, "Window: pkg=$pkg type=${window.type}")
+                if (pkg != null && isUssdPackage(pkg)) {
+                    return root
+                }
+                root.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error iterating windows", e)
+        }
+        return null
+    }
+
     private fun isUssdPackage(pkg: String): Boolean {
         return pkg == "com.android.phone" ||
-               pkg.contains("dialer") ||
-               pkg.contains("phone")
+               pkg == "com.google.android.dialer" ||
+               pkg == "com.samsung.android.dialer"
     }
 
     private fun handleUssdDialog(root: AccessibilityNodeInfo) {
-        // Find the USSD dialog specifically — look for the AlertDialog or dialog container
-        // that contains an EditText or "OK" button, to avoid reading text from the app behind it.
-        val dialogNode = findDialogContainer(root) ?: root
-        val messageText = collectAllText(dialogNode)
-        if (messageText.isBlank()) return
+        val messageText = collectAllText(root)
+        if (messageText.isBlank()) {
+            Log.d(TAG, "Empty message text")
+            return
+        }
+
+        Log.d(TAG, "Dialog text: ${messageText.take(200)}")
 
         // Don't respond to the same dialog twice
-        if (messageText == lastRespondedMessage) return
+        if (messageText == lastRespondedMessage) {
+            Log.d(TAG, "Same message as last, skipping")
+            return
+        }
 
         val lower = messageText.lowercase()
 
-        // NEVER auto-fill PIN — but only when it's a PIN entry prompt,
-        // not when "PIN" appears as a menu option (e.g. "7. UPI PIN")
+        // NEVER auto-fill PIN
         if (isPinEntryPrompt(lower)) {
+            broadcastStep(STEP_PIN_PROMPT, "Enter UPI PIN")
             clearPending()
             lastRespondedMessage = null
             return
         }
 
         // If there's no EditText, this is an info dialog (e.g. "Welcome to *99#").
-        // Auto-dismiss by clicking OK.
-        val editText = findNodeByClass(dialogNode, "android.widget.EditText")
+        val editText = findNodeByClass(root, "android.widget.EditText")
         if (editText == null) {
-            val okButton = findButtonByText(dialogNode, "ok")
+            Log.d(TAG, "No EditText found, looking for OK button")
+            val okButton = findButtonByText(root, "ok")
             if (okButton != null) {
+                Log.d(TAG, "Clicking OK button")
                 okButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 lastRespondedMessage = messageText
+                broadcastStep(STEP_WELCOME, "Welcome dialog dismissed")
+            } else {
+                Log.d(TAG, "No OK button found either")
             }
             return
         }
 
-        val (step, response) = determineStepAndResponse(lower) ?: return
+        val (step, response) = determineStepAndResponse(lower) ?: run {
+            Log.d(TAG, "No step matched for message")
+            return
+        }
+        Log.d(TAG, "Step $step -> response: $response")
 
         // Set text in the EditText
         val args = Bundle().apply {
@@ -118,27 +183,44 @@ class UssdAccessibilityService : AccessibilityService() {
         }
         editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
 
-        // Click Send/Reply button
-        val sendBtn = findSendButton(dialogNode) ?: return
+        // Click Send button
+        val sendBtn = findSendButton(root)
+        if (sendBtn == null) {
+            Log.d(TAG, "No SEND button found")
+            return
+        }
+        Log.d(TAG, "Clicking SEND button")
         sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
         lastRespondedMessage = messageText
+        broadcastStep(step, stepLabel(step, response))
 
-        // After remarks (step 5), we're done — PIN entry is next (manual)
-        if (step >= 5) {
+        // After remarks (step 5), we're done — PIN entry is next
+        if (step >= STEP_REMARKS_SKIPPED) {
             clearPending()
             lastRespondedMessage = null
         }
     }
 
-    /**
-     * Returns true only when the dialog is asking the user to ENTER their PIN,
-     * not when "PIN" just appears as a menu item (e.g. "7. UPI PIN").
-     */
+    private fun broadcastStep(step: Int, label: String) {
+        sendBroadcast(Intent(ACTION_STEP_COMPLETED).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_STEP, step)
+            putExtra(EXTRA_STEP_LABEL, label)
+        })
+    }
+
+    private fun stepLabel(step: Int, response: String): String = when (step) {
+        STEP_SEND_MONEY -> "Send Money selected"
+        STEP_UPI_ID_SELECTED -> "UPI ID option selected"
+        STEP_VPA_ENTERED -> "VPA entered: $response"
+        STEP_AMOUNT_ENTERED -> "Amount entered: $response"
+        STEP_REMARKS_SKIPPED -> "Remarks skipped"
+        else -> ""
+    }
+
     private fun isPinEntryPrompt(message: String): Boolean {
-        // If it looks like a numbered menu, "PIN" is just an option label
         if (message.contains("1.") && message.contains("2.")) return false
-        // Actual PIN entry prompts
         return message.contains("enter") && (message.contains("pin") || message.contains("mpin")) ||
                 message.contains("mpin") && !message.contains("1.")
     }
@@ -151,52 +233,30 @@ class UssdAccessibilityService : AccessibilityService() {
         return when {
             // Step 5: Remarks
             message.contains("remark") ->
-                5 to "1"
+                STEP_REMARKS_SKIPPED to "1"
 
             // Step 2: "Send Money to:" menu → select UPI ID (always option 3)
             isMenu && message.contains("send money to") ->
-                2 to "3"
+                STEP_UPI_ID_SELECTED to "3"
 
             // Step 1: Main menu → select Send Money (option 1)
             isMenu && message.contains("send money") ->
-                1 to "1"
+                STEP_SEND_MONEY to "1"
 
             // Step 4: Enter amount (non-menu prompt)
             !isMenu && message.contains("amount") ->
-                4 to (amount ?: return null)
+                STEP_AMOUNT_ENTERED to (amount ?: return null)
 
-            // Step 3: Enter VPA (non-menu prompt asking for input)
+            // Step 3: Enter VPA (non-menu prompt)
             !isMenu && (message.contains("vpa") || message.contains("upi") ||
                 message.contains("virtual payment") || message.contains("beneficiary") ||
                 message.contains("payee")) ->
-                3 to vpa
+                STEP_VPA_ENTERED to vpa
 
             else -> null
         }
     }
 
-    /**
-     * Finds the USSD dialog container in the accessibility tree.
-     * Looks for AlertDialog, Dialog, or any node with "dialog" in its class/role
-     * that contains a Button (SEND/OK/CANCEL).
-     */
-    private fun findDialogContainer(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val cls = root.className?.toString()?.lowercase() ?: ""
-        if (cls.contains("dialog") || cls.contains("alertdialog")) {
-            return root
-        }
-        // Also check for a FrameLayout/LinearLayout that directly contains both
-        // a TextView (message) and a Button (send/cancel) — typical USSD dialog structure
-        for (i in 0 until root.childCount) {
-            val child = root.getChild(i) ?: continue
-            val result = findDialogContainer(child)
-            if (result != null) return result
-            child.recycle()
-        }
-        return null
-    }
-
-    /** Collects all text content from the accessibility node tree. */
     private fun collectAllText(node: AccessibilityNodeInfo): String {
         val sb = StringBuilder()
         gatherText(node, sb)
@@ -212,7 +272,6 @@ class UssdAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Finds a node by its widget class name (DFS). */
     private fun findNodeByClass(root: AccessibilityNodeInfo, className: String): AccessibilityNodeInfo? {
         if (root.className?.toString() == className) return root
         for (i in 0 until root.childCount) {
@@ -228,7 +287,6 @@ class UssdAccessibilityService : AccessibilityService() {
         return null
     }
 
-    /** Finds the Send/Reply/OK button in the USSD dialog. */
     private fun findSendButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         return findButtonByText(root, "send")
             ?: findButtonByText(root, "reply")
@@ -245,10 +303,7 @@ class UssdAccessibilityService : AccessibilityService() {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val result = findButtonByText(child, text)
-            if (result != null) {
-                // don't recycle — caller needs the result
-                return result
-            }
+            if (result != null) return result
             child.recycle()
         }
         return null
