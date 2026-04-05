@@ -32,19 +32,19 @@
     <string name="currency_format">₹ %1$s</string>
     <string name="btn_pay_ussd">Pay via USSD (*99#)</string>
     <string name="confirm_security_note">🔒 Your UPI PIN is never captured or stored by this app.</string>
-    <string name="toast_upi_id_copied">UPI ID copied to clipboard. Paste it in USSD when prompted.</string>
-    <string name="toast_dial_fallback">Call permission denied — please dial *99# manually and tap call.</string>
+    <string name="toast_dial_fallback">Call permission denied — please dial *99# manually.</string>
+    <string name="toast_upi_copied">UPI ID copied to clipboard</string>
 
     <!-- USSD Instructions -->
     <string name="ussd_title">USSD Payment Steps</string>
-    <string name="ussd_subtitle">Follow these steps in your phone\'s dialer after *99# connects</string>
-    <string name="ussd_step1">Step 1 — Select option 1 (Send Money)</string>
-    <string name="ussd_step2">Step 2 — Enter UPI ID: %1$s</string>
+    <string name="ussd_subtitle">*99# has been dialed. Follow these steps in the USSD menu:</string>
+    <string name="ussd_step1">Step 1 — Select \"Send Money\" from the USSD menu</string>
+    <string name="ussd_step2">Step 2 — Enter UPI ID: %1$s\n(Long press and paste — it has been copied to clipboard)</string>
     <string name="ussd_step2_clipboard">Step 2 — Enter UPI ID: %1$s
 (Long press input field and paste — it has been copied automatically)</string>
     <string name="ussd_clipboard_copied_badge">✔ UPI ID copied automatically</string>
-    <string name="ussd_step3_with_amount">Step 3 — Enter Amount: ₹ %1$s</string>
-    <string name="ussd_step3_no_amount">Step 3 — Enter the payment amount</string>
+    <string name="ussd_step3_with_amount">Step 3 — Amount ₹ %1$s has been pre-filled</string>
+    <string name="ussd_step3_no_amount">Step 3 — Enter the payment amount when prompted</string>
     <string name="ussd_step4">Step 4 — Enter your UPI PIN to confirm</string>
     <string name="ussd_sms_disclaimer">📱 Transaction confirmation will be received via SMS from your bank. This app does not verify or track transactions.</string>
     <string name="ussd_security_note">This app does not replace official UPI apps. No payment data is stored.</string>

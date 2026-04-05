@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.offlineupi.app'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.offlineupi.app"
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0"
     }
@@ -52,12 +52,12 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
 
-    // CameraX
-    implementation 'androidx.camera:camera-core:1.3.1'
-    implementation 'androidx.camera:camera-camera2:1.3.1'
-    implementation 'androidx.camera:camera-lifecycle:1.3.1'
-    implementation 'androidx.camera:camera-view:1.3.1'
+    // CameraX (16KB-aligned native libs)
+    implementation 'androidx.camera:camera-core:1.4.1'
+    implementation 'androidx.camera:camera-camera2:1.4.1'
+    implementation 'androidx.camera:camera-lifecycle:1.4.1'
+    implementation 'androidx.camera:camera-view:1.4.1'
 
-    // ML Kit Barcode Scanning (bundled - works fully offline)
-    implementation 'com.google.mlkit:barcode-scanning:17.2.0'
+    // ML Kit Barcode Scanning (bundled - works fully offline, 16KB-aligned)
+    implementation 'com.google.mlkit:barcode-scanning:17.3.0'
 }

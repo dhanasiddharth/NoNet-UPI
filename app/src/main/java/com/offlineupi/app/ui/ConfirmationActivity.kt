@@ -3,7 +3,6 @@ package com.offlineupi.app.ui
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -26,17 +25,14 @@ import com.offlineupi.app.viewmodel.ConfirmationViewModel
 /**
  * Confirmation screen showing parsed UPI payment details.
  * When the user taps "Pay via USSD (*99#)":
- *  A. Copies UPI ID to clipboard automatically.
- *  B. Shows a Toast instructing the user to paste when prompted.
- *  C. Requests CALL_PHONE permission if not already granted.
- *  D. Auto-dials *99# using Intent.ACTION_CALL (falls back to ACTION_DIAL if denied).
- *  E. Navigates to UssdInstructionActivity.
- *  F. Clears clipboard after 60 seconds (privacy).
+ *  A. Copies UPI ID to clipboard (auto-clears after 60s).
+ *  B. Requests CALL_PHONE permission if not already granted.
+ *  C. Auto-dials *99# using Intent.ACTION_CALL (falls back to ACTION_DIAL if denied).
+ *  D. Navigates to UssdInstructionActivity with step-by-step guide.
  *
  * SECURITY:
  * - No UPI PIN is captured here.
  * - Payment data is NOT persisted to disk or sent over network.
- * - Clipboard is cleared after 60 seconds to minimise exposure window.
  * - UPI ID is NOT logged.
  */
 class ConfirmationActivity : AppCompatActivity() {
@@ -45,16 +41,12 @@ class ConfirmationActivity : AppCompatActivity() {
         const val EXTRA_PAYEE_ADDRESS = "extra_payee_address"
         const val EXTRA_PAYEE_NAME = "extra_payee_name"
         const val EXTRA_AMOUNT = "extra_amount"
-        private const val CLIPBOARD_CLEAR_DELAY_MS = 60_000L
     }
 
     private lateinit var binding: ActivityConfirmationBinding
     private val viewModel: ConfirmationViewModel by viewModels()
 
-    private val clipboardClearHandler = Handler(Looper.getMainLooper())
-    private val clearClipboardRunnable = Runnable { clearClipboard() }
-
-    // Holds the resolved payment data while waiting for permission result
+    // Holds the USSD string while waiting for permission result
     private var pendingPayeeAddress: String? = null
     private var pendingAmount: String? = null
 
@@ -63,15 +55,13 @@ class ConfirmationActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             val address = pendingPayeeAddress ?: return@registerForActivityResult
             val amount = pendingAmount
+            navigateToUssdInstructions(address, amount)
             if (granted) {
-                autoDialUssd()
+                dialUssd99()
             } else {
-                // Permission denied — fall back to manual dialer
                 Toast.makeText(this, getString(R.string.toast_dial_fallback), Toast.LENGTH_LONG).show()
                 fallbackDialer()
             }
-            navigateToUssdInstructions(address, amount)
-            scheduleClearClipboard()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,74 +120,62 @@ class ConfirmationActivity : AppCompatActivity() {
             viewModel.validateAndGetAmount(binding.etAmount.text.toString()) ?: return
         }
 
+        // Copy UPI ID to clipboard so user can paste it in the USSD session
+        copyToClipboard(data.payeeAddress)
+
         // Store pending values for the permission callback
         pendingPayeeAddress = data.payeeAddress
         pendingAmount       = finalAmount
 
-        // A: Copy UPI ID to clipboard
-        copyUpiIdToClipboard(data.payeeAddress)
-
-        // B: Inform user
-        Toast.makeText(this, getString(R.string.toast_upi_id_copied), Toast.LENGTH_LONG).show()
-
-        // C+D: Check / request CALL_PHONE and dial
+        // Check / request CALL_PHONE and dial *99#
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            // Already granted — auto-dial immediately
-            autoDialUssd()
             navigateToUssdInstructions(data.payeeAddress, finalAmount)
-            scheduleClearClipboard()
+            dialUssd99()
         } else {
-            // Request permission; dialing + navigation happen in the launcher callback
             callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
         }
     }
 
     /**
-     * Automatically initiates the USSD call using ACTION_CALL.
-     * Requires CALL_PHONE permission — granted before this is called.
-     * *99# is encoded as tel:*99%23.
+     * Copies UPI ID to clipboard and schedules auto-clear after 60 seconds for privacy.
      */
-    private fun autoDialUssd() {
-        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:*99%23"))
-        startActivity(callIntent)
+    private fun copyToClipboard(vpa: String) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("UPI ID", vpa))
+        Toast.makeText(this, getString(R.string.toast_upi_copied), Toast.LENGTH_SHORT).show()
+        // Auto-clear clipboard after 60 seconds for privacy
+        Handler(Looper.getMainLooper()).postDelayed({
+            clipboard.clearPrimaryClip()
+        }, 60_000)
+    }
+
+    /**
+     * Dials *99# — the NUUP USSD entry point. The user then navigates
+     * the interactive USSD menu (Send Money → UPI ID → paste VPA → enter amount).
+     */
+    private fun dialUssd99() {
+        val uri = Uri.parse("tel:*99" + Uri.encode("#"))
+        try {
+            startActivity(Intent(Intent.ACTION_CALL, uri))
+        } catch (e: Exception) {
+            fallbackDialer()
+        }
     }
 
     /**
      * Fallback: opens the dialer pre-filled with *99# when CALL_PHONE is denied.
-     * User must tap the call button manually.
      */
     private fun fallbackDialer() {
-        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:*99%23")))
-    }
-
-    /** Copies UPI VPA to clipboard. VPA is NOT logged. */
-    private fun copyUpiIdToClipboard(payeeAddress: String) {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("UPI_ID", payeeAddress))
-    }
-
-    private fun scheduleClearClipboard() {
-        clipboardClearHandler.removeCallbacks(clearClipboardRunnable)
-        clipboardClearHandler.postDelayed(clearClipboardRunnable, CLIPBOARD_CLEAR_DELAY_MS)
-    }
-
-    private fun clearClipboard() {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+        val uri = Uri.parse("tel:*99" + Uri.encode("#"))
+        startActivity(Intent(Intent.ACTION_DIAL, uri))
     }
 
     private fun navigateToUssdInstructions(payeeAddress: String, amount: String?) {
         startActivity(Intent(this, UssdInstructionActivity::class.java).apply {
             putExtra(UssdInstructionActivity.EXTRA_PAYEE_ADDRESS, payeeAddress)
             putExtra(UssdInstructionActivity.EXTRA_AMOUNT, amount)
-            putExtra(UssdInstructionActivity.EXTRA_CLIPBOARD_COPIED, true)
         })
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        clipboardClearHandler.removeCallbacks(clearClipboardRunnable)
     }
 }
