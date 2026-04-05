@@ -99,6 +99,11 @@ class ConfirmationActivity : AppCompatActivity() {
         } else {
             binding.tvAmount.isVisible = false
             binding.tilAmountInput.isVisible = true
+            binding.etAmount.requestFocus()
+            binding.etAmount.postDelayed({
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(binding.etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }, 200)
             binding.etAmount.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = viewModel.clearAmountError()

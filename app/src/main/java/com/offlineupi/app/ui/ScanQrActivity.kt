@@ -33,6 +33,7 @@ class ScanQrActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScanQrBinding
     private val viewModel: ScanQrViewModel by viewModels()
     private lateinit var cameraExecutor: ExecutorService
+    private var hasNavigated = false
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -112,7 +113,10 @@ class ScanQrActivity : AppCompatActivity() {
                 is ScanQrViewModel.ScanState.Idle -> Unit
 
                 is ScanQrViewModel.ScanState.Success -> {
-                    navigateToConfirmation(state.data)
+                    if (!hasNavigated) {
+                        hasNavigated = true
+                        navigateToConfirmation(state.data)
+                    }
                 }
 
                 is ScanQrViewModel.ScanState.Error -> {
@@ -136,6 +140,11 @@ class ScanQrActivity : AppCompatActivity() {
     private fun showError(message: String) {
         Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
         viewModel.reset()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hasNavigated = false
     }
 
     override fun onDestroy() {
