@@ -59,6 +59,8 @@
     <string name="ussd_sms_disclaimer">📱 Transaction confirmation will be received via SMS from your bank. This app does not verify or track transactions.</string>
     <string name="ussd_security_note">This app does not replace official UPI apps. No payment data is stored.</string>
     <string name="btn_done">Done</string>
+    <string name="btn_retry">Retry Transaction</string>
+    <string name="ussd_subtitle_retrying">Retrying… *99# has been re-dialed.</string>
 
     <!-- Accessibility Service -->
     <string name="accessibility_service_description">Auto-fills USSD (*99#) payment prompts with UPI ID and amount from scanned QR codes. UPI PIN is never auto-filled.</string>

@@ -346,6 +346,22 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:layout_marginTop="12dp" />
 
+        <!-- Retry Button (hidden by default, shown on failure or when stuck) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRetry"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:text="@string/btn_retry"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            app:backgroundTint="@color/accent_indigo"
+            app:cornerRadius="16dp"
+            app:layout_constraintTop_toBottomOf="@id/tvSecurityNote"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone" />
+
         <!-- Done Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDone"
@@ -359,10 +375,10 @@
             app:strokeWidth="1dp"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             app:cornerRadius="16dp"
-            app:layout_constraintTop_toBottomOf="@id/tvSecurityNote"
+            app:layout_constraintTop_toBottomOf="@id/btnRetry"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="24dp" />
+            android:layout_marginTop="12dp" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

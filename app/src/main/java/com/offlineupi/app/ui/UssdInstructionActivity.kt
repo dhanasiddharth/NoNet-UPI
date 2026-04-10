@@ -1,14 +1,19 @@
 package com.offlineupi.app.ui
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityUssdInstructionBinding
@@ -53,6 +58,8 @@ class UssdInstructionActivity : AppCompatActivity() {
         autoFilling = UssdAccessibilityService.hasPending()
 
         setupSteps()
+
+        binding.btnRetry.setOnClickListener { retryTransaction() }
 
         binding.btnDone.setOnClickListener {
             UssdAccessibilityService.clearPending()
@@ -159,13 +166,53 @@ class UssdInstructionActivity : AppCompatActivity() {
                 setStepDone(binding.tvStep5Status)
                 binding.tvStep5.text = "UPI PIN entered"
                 showResult(true, resultText)
+                showRetryButton()
             }
             UssdAccessibilityService.STEP_RESULT_FAILURE -> {
                 setStepDone(binding.tvStep5Status)
                 binding.tvStep5.text = "UPI PIN entered"
                 showResult(false, resultText)
+                showRetryButton()
             }
         }
+    }
+
+    private fun retryTransaction() {
+        // Reset accessibility service state and re-set pending payment
+        UssdAccessibilityService.clearPending()
+        UssdAccessibilityService.setPendingPayment(payeeAddress, amount)
+        autoFilling = true
+
+        // Reset UI
+        setupSteps()
+        binding.btnRetry.visibility = View.GONE
+        binding.dividerResult.visibility = View.GONE
+        binding.layoutResult.visibility = View.GONE
+        binding.tvResultDetails.visibility = View.GONE
+        binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_retrying)
+
+        // Re-dial *99#
+        dialUssd99()
+    }
+
+    private fun dialUssd99() {
+        val uri = Uri.parse("tel:*99" + Uri.encode("#"))
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            try {
+                startActivity(Intent(Intent.ACTION_CALL, uri))
+            } catch (_: Exception) {
+                startActivity(Intent(Intent.ACTION_DIAL, uri))
+            }
+        } else {
+            Toast.makeText(this, getString(R.string.toast_dial_fallback), Toast.LENGTH_LONG).show()
+            startActivity(Intent(Intent.ACTION_DIAL, uri))
+        }
+    }
+
+    private fun showRetryButton() {
+        binding.btnRetry.visibility = View.VISIBLE
     }
 
     private fun showResult(success: Boolean, rawText: String?) {
