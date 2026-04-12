@@ -9,42 +9,79 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Telephony
+import android.telephony.SmsMessage
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
+import com.offlineupi.app.data.AccountStore
+import com.offlineupi.app.data.PinStore
+import com.offlineupi.app.data.SecureBalanceStore
+import com.offlineupi.app.data.SecureBalanceStore.Companion.SOURCE_SMS
+import com.offlineupi.app.data.Transaction
+import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.databinding.ActivityUssdInstructionBinding
+import com.offlineupi.app.sms.SmsParser
+import com.offlineupi.app.util.formatIndianNumber
 
-/**
- * Displays USSD payment progress after *99# has been dialed.
- *
- * Listens for step completion broadcasts from UssdAccessibilityService
- * and updates each step's status indicator in real time.
- *
- * SECURITY:
- * - No UPI PIN is displayed, suggested, or captured.
- * - The UPI ID shown here is only for user reference; it is not stored.
- */
 class UssdInstructionActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PAYEE_ADDRESS = "extra_payee_address"
         const val EXTRA_AMOUNT = "extra_amount"
+        const val EXTRA_REMARKS = "extra_remarks"
     }
 
     private lateinit var binding: ActivityUssdInstructionBinding
+    private lateinit var transactionStore: TransactionStore
+    private lateinit var accountStore: AccountStore
+    private lateinit var balanceStore: SecureBalanceStore
     private var payeeAddress = ""
     private var amount: String? = null
+    private var remarks: String? = null
     private var autoFilling = false
+    private var capturedAccountNumber: String? = null
+    private var currentTransactionId: String? = null
+    private var smsReceiverRegistered = false
+    private var smsAlreadyMatched = false
+
+    private val smsPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) registerSmsReceiver()
+        }
 
     private val stepReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val step = intent.getIntExtra(UssdAccessibilityService.EXTRA_STEP, -1)
             val resultText = intent.getStringExtra(UssdAccessibilityService.EXTRA_RESULT_TEXT)
+            val accountNumber = intent.getStringExtra(UssdAccessibilityService.EXTRA_ACCOUNT_NUMBER)
+            val bankName = intent.getStringExtra(UssdAccessibilityService.EXTRA_BANK_NAME)
+            if (accountNumber != null) {
+                capturedAccountNumber = accountNumber
+                accountStore.saveAccountNumber(accountNumber)
+                if (bankName != null) accountStore.saveBankName(bankName)
+            }
             onStepCompleted(step, resultText)
+        }
+    }
+
+    private val smsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
+            val bundle = intent.extras ?: return
+            val pdus = bundle.get("pdus") as? Array<*> ?: return
+            val format = bundle.getString("format", "3gpp")
+            val fullBody = StringBuilder()
+            pdus.forEach { pdu ->
+                val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
+                fullBody.append(msg.messageBody)
+            }
+            handleIncomingSms(fullBody.toString())
         }
     }
 
@@ -53,11 +90,17 @@ class UssdInstructionActivity : AppCompatActivity() {
         binding = ActivityUssdInstructionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        transactionStore = TransactionStore(this)
+        accountStore = AccountStore(this)
+        balanceStore = SecureBalanceStore(this)
+
         payeeAddress = intent.getStringExtra(EXTRA_PAYEE_ADDRESS) ?: ""
         amount = intent.getStringExtra(EXTRA_AMOUNT)
+        remarks = intent.getStringExtra(EXTRA_REMARKS)
         autoFilling = UssdAccessibilityService.hasPending()
 
         setupSteps()
+        requestSmsPermission()
 
         binding.btnRetry.setOnClickListener { retryTransaction() }
 
@@ -83,6 +126,83 @@ class UssdInstructionActivity : AppCompatActivity() {
         unregisterReceiver(stepReceiver)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (smsReceiverRegistered) {
+            try { unregisterReceiver(smsReceiver) } catch (_: Exception) {}
+            smsReceiverRegistered = false
+        }
+    }
+
+    private fun requestSmsPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            registerSmsReceiver()
+        } else {
+            smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+        }
+    }
+
+    private fun registerSmsReceiver() {
+        if (smsReceiverRegistered) return
+        val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
+        filter.priority = IntentFilter.SYSTEM_HIGH_PRIORITY
+        registerReceiver(smsReceiver, filter)
+        smsReceiverRegistered = true
+    }
+
+    private fun handleIncomingSms(body: String) {
+        if (smsAlreadyMatched) return
+        val parsed = SmsParser.parseUpiSms(body) ?: return
+        val txnId = currentTransactionId ?: return
+
+        // Match by amount (numeric comparison to handle "500" vs "500.00")
+        val txnAmount = amount?.replace(",", "")?.trim()?.toDoubleOrNull()
+        val smsAmount = parsed.amount.replace(",", "").trim().toDoubleOrNull()
+        if (txnAmount != null && smsAmount != null && txnAmount != smsAmount) return
+
+        // Match by account number (last 4 digits) if both are available
+        val knownAccount = capturedAccountNumber ?: accountStore.getAccountNumber()
+        if (knownAccount != null && parsed.accountNumber != null) {
+            val knownSuffix = knownAccount.takeLast(4)
+            val smsSuffix = parsed.accountNumber.takeLast(4)
+            if (knownSuffix != smsSuffix) return
+        }
+
+        // Prevent duplicate matches
+        smsAlreadyMatched = true
+
+        // A debit SMS confirms the payment actually succeeded
+        transactionStore.updateTransaction(txnId) { txn ->
+            txn.copy(
+                status = "success",
+                rrn = parsed.rrn ?: txn.rrn,
+                balance = parsed.balance ?: txn.balance,
+                accountNumber = parsed.accountNumber ?: txn.accountNumber,
+                rawSmsText = body
+            )
+        }
+
+        // Update stored balance if available
+        if (parsed.balance != null) {
+            balanceStore.saveBalance("\u20B9 ${formatIndianNumber(parsed.balance)}", SecureBalanceStore.SOURCE_SMS)
+        }
+
+        runOnUiThread {
+            showResult(true, null)
+            binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_success)
+            binding.btnRetry.visibility = View.GONE
+
+            binding.btnDone.text = "View Receipt"
+            binding.btnDone.setOnClickListener {
+                startActivity(Intent(this, TransactionReceiptActivity::class.java).apply {
+                    putExtra(TransactionReceiptActivity.EXTRA_TRANSACTION_ID, txnId)
+                })
+            }
+        }
+    }
+
     private fun setupSteps() {
         if (autoFilling) {
             binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_autofill)
@@ -90,15 +210,12 @@ class UssdInstructionActivity : AppCompatActivity() {
             binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle)
         }
 
-        // Step 1: Send Money
         binding.tvStep1.text = getString(R.string.ussd_step1_pending)
         setStepPending(binding.tvStep1Status, "1")
 
-        // Step 2: Select UPI ID
         binding.tvStep2.text = getString(R.string.ussd_step2_pending)
         setStepPending(binding.tvStep2Status, "2")
 
-        // Step 3: Enter VPA
         if (autoFilling) {
             binding.tvStep3.text = getString(R.string.ussd_step3_pending, payeeAddress)
         } else {
@@ -106,19 +223,17 @@ class UssdInstructionActivity : AppCompatActivity() {
         }
         setStepPending(binding.tvStep3Status, "3")
 
-        // Step 4: Enter amount
-        binding.tvStep4.text = if (!amount.isNullOrBlank()) {
-            getString(R.string.ussd_step4_pending, amount)
+        val displayAmount = amount
+        binding.tvStep4.text = if (!displayAmount.isNullOrBlank()) {
+            getString(R.string.ussd_step4_pending, formatIndianNumber(displayAmount))
         } else {
             getString(R.string.ussd_step4_no_amount)
         }
         setStepPending(binding.tvStep4Status, "4")
 
-        // Step 5: UPI PIN (always manual)
         binding.tvStep5.text = getString(R.string.ussd_step5_pending)
         setStepPending(binding.tvStep5Status, "5")
 
-        // Clipboard badge
         binding.tvClipboardBadge.visibility = if (!autoFilling) View.VISIBLE else View.GONE
         binding.tvClipboardBadge.text = getString(R.string.ussd_clipboard_copied_badge)
 
@@ -148,50 +263,88 @@ class UssdInstructionActivity : AppCompatActivity() {
             }
             UssdAccessibilityService.STEP_AMOUNT_ENTERED -> {
                 setStepDone(binding.tvStep4Status)
-                binding.tvStep4.text = getString(R.string.ussd_step4_done, amount ?: "")
+                val doneAmount = amount
+                binding.tvStep4.text = getString(R.string.ussd_step4_done, if (!doneAmount.isNullOrBlank()) formatIndianNumber(doneAmount) else "")
                 setStepActive(binding.tvStep5Status)
                 binding.tvStep5.text = getString(R.string.ussd_step5_ready)
             }
             UssdAccessibilityService.STEP_REMARKS_SKIPPED -> {
                 setStepActive(binding.tvStep5Status)
-                binding.tvStep5.text = getString(R.string.ussd_step5_ready)
-                binding.tvUssdSubtitle.text = "Auto-fill complete. Enter your UPI PIN to finish."
+                if (PinStore.hasPin()) {
+                    binding.tvStep5.text = getString(R.string.ussd_step5_autofill)
+                    binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_pin_autofill)
+                } else {
+                    binding.tvStep5.text = getString(R.string.ussd_step5_ready)
+                    binding.tvUssdSubtitle.text = "Auto-fill complete. Enter your UPI PIN to finish."
+                }
             }
             UssdAccessibilityService.STEP_PIN_PROMPT -> {
-                setStepActive(binding.tvStep5Status)
-                binding.tvStep5.text = getString(R.string.ussd_step5_ready)
-                binding.tvUssdSubtitle.text = "Enter your UPI PIN to complete the payment."
+                if (PinStore.hasPin()) {
+                    setStepDone(binding.tvStep5Status)
+                    binding.tvStep5.text = getString(R.string.ussd_step5_autofilled)
+                    binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_pin_autofill)
+                } else {
+                    setStepActive(binding.tvStep5Status)
+                    binding.tvStep5.text = getString(R.string.ussd_step5_ready)
+                    binding.tvUssdSubtitle.text = "Enter your UPI PIN to complete the payment."
+                }
             }
             UssdAccessibilityService.STEP_RESULT_SUCCESS -> {
                 setStepDone(binding.tvStep5Status)
                 binding.tvStep5.text = "UPI PIN entered"
                 showResult(true, resultText)
-                showRetryButton()
+                saveTransaction("success", resultText)
+                binding.btnRetry.visibility = View.GONE
             }
             UssdAccessibilityService.STEP_RESULT_FAILURE -> {
                 setStepDone(binding.tvStep5Status)
                 binding.tvStep5.text = "UPI PIN entered"
                 showResult(false, resultText)
+                saveTransaction("failure", resultText)
                 showRetryButton()
             }
         }
     }
 
+    private fun saveTransaction(status: String, rawUssdText: String?) {
+        val txn = Transaction(
+            type = "payment",
+            amount = amount,
+            payeeAddress = payeeAddress,
+            payeeName = null,
+            accountNumber = capturedAccountNumber ?: accountStore.getAccountNumber(),
+            rrn = null,
+            balance = null,
+            remarks = remarks,
+            status = status,
+            rawSmsText = null
+        )
+        transactionStore.saveTransaction(txn)
+        currentTransactionId = txn.id
+
+        // Update Done button to View Receipt
+        binding.btnDone.text = "View Receipt"
+        binding.btnDone.setOnClickListener {
+            startActivity(Intent(this, TransactionReceiptActivity::class.java).apply {
+                putExtra(TransactionReceiptActivity.EXTRA_TRANSACTION_ID, txn.id)
+            })
+        }
+    }
+
     private fun retryTransaction() {
-        // Reset accessibility service state and re-set pending payment
         UssdAccessibilityService.clearPending()
-        UssdAccessibilityService.setPendingPayment(payeeAddress, amount)
+        UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks)
         autoFilling = true
 
-        // Reset UI
         setupSteps()
         binding.btnRetry.visibility = View.GONE
         binding.dividerResult.visibility = View.GONE
         binding.layoutResult.visibility = View.GONE
         binding.tvResultDetails.visibility = View.GONE
         binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_retrying)
+        currentTransactionId = null
+        smsAlreadyMatched = false
 
-        // Re-dial *99#
         dialUssd99()
     }
 
@@ -235,11 +388,10 @@ class UssdInstructionActivity : AppCompatActivity() {
             binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_failure)
         }
 
-        // Show the raw USSD response text for reference
         if (!rawText.isNullOrBlank()) {
-            // Clean up: remove button text like "OK" from the raw text
+            val buttonWords = setOf("ok", "cancel", "send", "reply")
             val cleaned = rawText.lines()
-                .filter { it.trim().lowercase() != "ok" && it.trim().lowercase() != "cancel" }
+                .filter { it.trim().lowercase() !in buttonWords }
                 .joinToString("\n").trim()
             if (cleaned.isNotBlank()) {
                 binding.tvResultDetails.text = cleaned
@@ -261,7 +413,7 @@ class UssdInstructionActivity : AppCompatActivity() {
     }
 
     private fun setStepDone(indicator: TextView) {
-        indicator.text = "\u2713" // checkmark
+        indicator.text = "\u2713"
         indicator.setBackgroundResource(R.drawable.bg_step_done)
         indicator.setTextColor(getColor(R.color.white))
     }

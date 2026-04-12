@@ -23,6 +23,7 @@ import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.model.UpiPaymentData
+import com.offlineupi.app.util.formatIndianNumber
 import com.offlineupi.app.viewmodel.ConfirmationViewModel
 
 /**
@@ -93,7 +94,7 @@ class ConfirmationActivity : AppCompatActivity() {
         binding.tvUpiId.text    = data.payeeAddress
 
         if (data.hasAmount) {
-            binding.tvAmount.text      = getString(R.string.currency_format, data.amount)
+            binding.tvAmount.text      = getString(R.string.currency_format, formatIndianNumber(data.amount!!))
             binding.tvAmount.isVisible = true
             binding.tilAmountInput.isVisible = false
         } else {
@@ -128,20 +129,29 @@ class ConfirmationActivity : AppCompatActivity() {
             viewModel.validateAndGetAmount(binding.etAmount.text.toString()) ?: return
         }
 
+        val remarks = binding.etRemarks.text.toString().trim().ifBlank { null }
+
+        // Collect PIN before proceeding (skips dialog if already stored this session)
+        PinEntryDialog.ensurePin(this) {
+            startPaymentFlow(data.payeeAddress, finalAmount, remarks)
+        }
+    }
+
+    private fun startPaymentFlow(payeeAddress: String, amount: String?, remarks: String? = null) {
         // Copy UPI ID to clipboard as fallback
-        copyToClipboard(data.payeeAddress)
+        copyToClipboard(payeeAddress)
 
         // Store pending values for the permission callback
-        pendingPayeeAddress = data.payeeAddress
-        pendingAmount       = finalAmount
+        pendingPayeeAddress = payeeAddress
+        pendingAmount       = amount
 
         // Set pending payment for auto-fill accessibility service
-        UssdAccessibilityService.setPendingPayment(data.payeeAddress, finalAmount)
+        UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks)
 
         if (!isAccessibilityServiceEnabled()) {
-            promptEnableAccessibility(data.payeeAddress, finalAmount)
+            promptEnableAccessibility(payeeAddress, amount)
         } else {
-            proceedWithDial(data.payeeAddress, finalAmount)
+            proceedWithDial(payeeAddress, amount)
         }
     }
 
@@ -218,6 +228,7 @@ class ConfirmationActivity : AppCompatActivity() {
         startActivity(Intent(this, UssdInstructionActivity::class.java).apply {
             putExtra(UssdInstructionActivity.EXTRA_PAYEE_ADDRESS, payeeAddress)
             putExtra(UssdInstructionActivity.EXTRA_AMOUNT, amount)
+            putExtra(UssdInstructionActivity.EXTRA_REMARKS, UssdAccessibilityService.pendingRemarks)
         })
     }
 }

@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="56dp"
+        android:paddingBottom="32dp"
+        android:gravity="center_horizontal">
+
+        <!-- Shareable receipt card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardReceipt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/card_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp"
+                android:gravity="center_horizontal">
+
+                <!-- Status Icon -->
+                <TextView
+                    android:id="@+id/tvStatusIcon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:gravity="center"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white" />
+
+                <!-- Status Text -->
+                <TextView
+                    android:id="@+id/tvStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginTop="12dp" />
+
+                <!-- Amount (large, prominent) -->
+                <TextView
+                    android:id="@+id/tvAmount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginTop="4dp" />
+
+                <!-- RRN (prominent) -->
+                <LinearLayout
+                    android:id="@+id/layoutRrn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="@drawable/bg_pin_field"
+                    android:padding="16dp"
+                    android:layout_marginTop="20dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="RRN / REFERENCE NUMBER"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvRrn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:layout_marginTop="4dp"
+                        android:textIsSelectable="true" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginTop="20dp" />
+
+                <!-- Details grid -->
+                <!-- From Account -->
+                <LinearLayout
+                    android:id="@+id/layoutAccount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="FROM ACCOUNT"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvAccount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/dividerAccount"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginTop="16dp" />
+
+                <!-- To (Payee) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TO (UPI ID)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvPayee"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/accent_indigo_light"
+                        android:textSize="15sp"
+                        android:fontFamily="monospace"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginTop="16dp" />
+
+                <!-- Date & Time -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="DATE &amp; TIME"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvDateTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/dividerRemarks"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginTop="16dp" />
+
+                <!-- Remarks -->
+                <LinearLayout
+                    android:id="@+id/layoutRemarks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="REMARKS"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvRemarks"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Balance after (hidden behind eye) -->
+        <LinearLayout
+            android:id="@+id/layoutBalance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Balance after: "
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tvBalance"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <ImageView
+                android:id="@+id/ivToggleBalance"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_visibility_off"
+                app:tint="@color/text_secondary"
+                android:contentDescription="Toggle balance" />
+
+        </LinearLayout>
+
+        <!-- Share Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnShare"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Share Receipt"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            app:backgroundTint="@color/accent_indigo"
+            app:cornerRadius="16dp"
+            app:icon="@drawable/ic_share"
+            app:iconGravity="textStart"
+            app:iconPadding="8dp"
+            android:layout_marginTop="20dp" />
+
+        <!-- Check Status Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCheckStatus"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Check Status from SMS"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            app:backgroundTint="@color/card_bg"
+            app:strokeColor="@color/accent_indigo"
+            app:strokeWidth="1dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:cornerRadius="16dp"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <!-- Done Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDone"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/btn_done"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            app:backgroundTint="@color/card_bg"
+            app:strokeColor="@color/accent_indigo"
+            app:strokeWidth="1dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:cornerRadius="16dp"
+            android:layout_marginTop="12dp" />
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

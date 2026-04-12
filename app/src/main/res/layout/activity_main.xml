@@ -66,7 +66,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/tvOfflineBadge"
-        android:layout_marginTop="48dp"
+        android:layout_marginTop="40dp"
         android:layout_marginStart="32dp"
         android:layout_marginEnd="32dp" />
 
@@ -87,7 +87,40 @@
         android:layout_marginTop="16dp"
         android:layout_marginBottom="60dp" />
 
-    <!-- About button — text-only, anchored bottom-end -->
+    <!-- Bottom row: History, Accounts, About -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnHistory"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="History"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        app:icon="@drawable/ic_history"
+        app:iconTint="@color/text_secondary"
+        app:iconSize="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btnAccounts"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        android:layout_marginBottom="16dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAccounts"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Accounts"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        app:icon="@drawable/ic_account_balance"
+        app:iconTint="@color/text_secondary"
+        app:iconSize="16dp"
+        app:layout_constraintStart_toEndOf="@id/btnHistory"
+        app:layout_constraintEnd_toStartOf="@id/btnAbout"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginBottom="16dp" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAbout"
         style="@style/Widget.MaterialComponents.Button.TextButton"
@@ -96,9 +129,9 @@
         android:text="@string/btn_about"
         android:textColor="@color/text_secondary"
         android:textSize="13sp"
+        app:layout_constraintStart_toEndOf="@id/btnAccounts"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

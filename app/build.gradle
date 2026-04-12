@@ -11,8 +11,8 @@ android {
         applicationId "com.offlineupi.app"
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
     }
 
     buildTypes {
@@ -60,4 +60,10 @@ dependencies {
 
     // ML Kit Barcode Scanning (bundled - works fully offline, 16KB-aligned)
     implementation 'com.google.mlkit:barcode-scanning:17.3.0'
+
+    // Encrypted storage for sensitive data (balance)
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    // WorkManager for scheduled tasks (daily balance check)
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
 }

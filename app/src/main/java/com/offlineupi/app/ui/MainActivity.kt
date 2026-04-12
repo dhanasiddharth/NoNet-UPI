@@ -4,14 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.offlineupi.app.databinding.ActivityMainBinding
+import com.offlineupi.app.worker.DailyBalanceCheckWorker
 
-/**
- * Home screen of the UPI Offline Assistant app.
- * Contains a single entry point: the "Scan QR (Offline UPI)" button,
- * and an "About" button for app information.
- *
- * SECURITY: No sensitive data is created or stored in this Activity.
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -21,8 +15,19 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Schedule daily balance check at 8 AM
+        DailyBalanceCheckWorker.schedule(this)
+
         binding.btnScanQr.setOnClickListener {
             startActivity(Intent(this, ScanQrActivity::class.java))
+        }
+
+        binding.btnHistory.setOnClickListener {
+            startActivity(Intent(this, TransactionHistoryActivity::class.java))
+        }
+
+        binding.btnAccounts.setOnClickListener {
+            startActivity(Intent(this, BalanceOverviewActivity::class.java))
         }
 
         binding.btnAbout.setOnClickListener {

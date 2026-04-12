@@ -1,21 +1,17 @@
 <resources>
-    <string name="app_name">UPI Offline Assistant</string>
+    <string name="app_name">UPI Assistant</string>
 
     <!-- About Screen -->
-    <string name="about_description">UPI Offline Assistant is an open-source Android application that allows users to scan UPI QR codes offline and initiate telecom-based USSD (*99#) payments without internet.</string>
-    <string name="about_features">• Offline QR scanning\n• Extract UPI ID and amount\n• Automatic clipboard copy\n• Launch *99# dialer\n• Step-by-step payment guidance\n• No internet permission\n• No tracking\n• No data storage</string>
-    <string name="about_open_source">This project is open source and licensed under the Apache License 2.0.</string>
-    <string name="about_privacy_note">This application does NOT process payments. It does NOT store UPI PIN or transaction data. USSD service availability depends on telecom operator and bank support.</string>
+    <string name="about_description">UPI Assistant lets you scan UPI QR codes and make payments via USSD (*99#). It also tracks your transaction history, account balances, and automates the USSD payment flow.</string>
+    <string name="about_features">• QR scanning\n• Auto-fill USSD payment flow\n• Transaction history and receipts\n• Account balance tracking\n• Missed-call balance check\n• No tracking or analytics</string>
+    <string name="about_privacy_note">This application does NOT process payments directly. UPI PIN is stored in memory only and cleared on reboot. Transaction and balance data is stored encrypted on-device. USSD service availability depends on telecom operator and bank support.</string>
     <string name="about_version_label">Version</string>
     <string name="about_features_title">Features</string>
-    <string name="about_open_source_title">Open Source</string>
     <string name="about_privacy_title">Privacy &amp; Disclaimer</string>
-    <string name="btn_github">View on GitHub</string>
-    <string name="btn_telegram">Join Telegram</string>
     <string name="btn_about">About</string>
-    <string name="home_subtitle">Pay via USSD (*99#) without internet.\nScan any UPI QR code to get started.</string>
-    <string name="btn_scan_qr">Scan QR (Offline UPI)</string>
-    <string name="offline_badge">✓ Works offline · No internet required</string>
+    <string name="home_subtitle">Pay via USSD (*99#).\nScan any UPI QR code to get started.</string>
+    <string name="btn_scan_qr">Scan QR Code</string>
+    <string name="offline_badge">✓ Pay via USSD · Works without internet</string>
 
     <!-- Scanner -->
     <string name="scan_title">Scan UPI QR</string>
@@ -31,12 +27,12 @@
     <string name="hint_enter_amount">Enter Amount</string>
     <string name="currency_format">₹ %1$s</string>
     <string name="btn_pay_ussd">Pay via USSD (*99#)</string>
-    <string name="confirm_security_note">🔒 Your UPI PIN is never captured or stored by this app.</string>
+    <string name="confirm_security_note">🔒 Your UPI PIN is held in memory only and cleared on reboot.</string>
     <string name="toast_dial_fallback">Call permission denied — please dial *99# manually.</string>
     <string name="toast_upi_copied">UPI ID copied to clipboard</string>
 
     <!-- USSD Instructions -->
-    <string name="ussd_title">USSD Payment Steps</string>
+    <string name="ussd_title">Processing Payment</string>
     <string name="ussd_subtitle">*99# has been dialed. Follow these steps in the USSD menu:</string>
     <string name="ussd_subtitle_autofill">*99# has been dialed. USSD prompts are being auto-filled.</string>
     <string name="ussd_step1_pending">Select Send Money</string>
@@ -51,21 +47,58 @@
     <string name="ussd_step4_no_amount">Enter the payment amount</string>
     <string name="ussd_step5_pending">Enter your UPI PIN to confirm</string>
     <string name="ussd_step5_ready">Enter your UPI PIN now</string>
+    <string name="ussd_step5_autofill">Auto-filling UPI PIN…</string>
+    <string name="ussd_step5_autofilled">UPI PIN auto-filled</string>
+    <string name="ussd_subtitle_pin_autofill">UPI PIN is being auto-filled.</string>
     <string name="ussd_result_success">Payment successful</string>
     <string name="ussd_result_failure">Payment failed</string>
     <string name="ussd_subtitle_success">Payment completed successfully.</string>
     <string name="ussd_subtitle_failure">Payment was not successful. Please try again.</string>
     <string name="ussd_clipboard_copied_badge">UPI ID copied to clipboard</string>
-    <string name="ussd_sms_disclaimer">📱 Transaction confirmation will be received via SMS from your bank. This app does not verify or track transactions.</string>
-    <string name="ussd_security_note">This app does not replace official UPI apps. No payment data is stored.</string>
+    <string name="ussd_sms_disclaimer">📱 Transaction confirmation will be received via SMS from your bank.</string>
+    <string name="ussd_security_note">This app does not replace official UPI apps. All data is stored encrypted on-device only.</string>
     <string name="btn_done">Done</string>
     <string name="btn_retry">Retry Transaction</string>
     <string name="ussd_subtitle_retrying">Retrying… *99# has been re-dialed.</string>
 
+    <!-- PIN Entry -->
+    <string name="pin_dialog_title">Enter UPI PIN</string>
+    <string name="pin_dialog_subtitle">4 or 6 digit PIN · Stored in memory only until reboot</string>
+    <string name="pin_submit">Continue</string>
+    <string name="pin_clear">Clear</string>
+    <string name="pin_backspace">\u232B</string>
+    <string name="pin_saved_badge">PIN saved for this session</string>
+
+    <!-- Balance Check -->
+    <string name="btn_check_balance">Check Balance</string>
+    <string name="balance_title">Check Balance</string>
+    <string name="balance_subtitle">*99# has been dialed. Balance check in progress.</string>
+    <string name="balance_subtitle_pin">Enter your UPI PIN to view balance.</string>
+    <string name="balance_subtitle_success">Balance retrieved successfully.</string>
+    <string name="balance_subtitle_failure">Could not retrieve balance. Please try again.</string>
+    <string name="balance_subtitle_retrying">Retrying… *99# has been re-dialed.</string>
+    <string name="balance_step1_pending">Select Check Balance</string>
+    <string name="balance_step1_done">Check Balance selected</string>
+    <string name="balance_step2_pending">Enter UPI PIN to confirm</string>
+    <string name="balance_step2_ready">Enter your UPI PIN now</string>
+    <string name="balance_step2_autofill">Auto-filling UPI PIN…</string>
+    <string name="balance_step2_autofilled">UPI PIN auto-filled</string>
+    <string name="balance_subtitle_pin_autofill">UPI PIN is being auto-filled.</string>
+    <string name="balance_step2_done">UPI PIN entered</string>
+    <string name="balance_step3_pending">Waiting for balance</string>
+    <string name="balance_step3_done">Balance received</string>
+    <string name="balance_step3_error">Balance check failed</string>
+    <string name="balance_result_label">Available Balance</string>
+    <string name="balance_error_generic">Unable to retrieve balance. Please try again.</string>
+    <string name="balance_security_note">Balance is stored encrypted on your device only. No data is sent over the network.</string>
+    <string name="balance_card_title">Account Balance</string>
+    <string name="balance_last_checked">Last checked: %1$s</string>
+    <string name="balance_not_checked">Tap to check your balance via USSD</string>
+
     <!-- Accessibility Service -->
-    <string name="accessibility_service_description">Auto-fills USSD (*99#) payment prompts with UPI ID and amount from scanned QR codes. UPI PIN is never auto-filled.</string>
+    <string name="accessibility_service_description">Auto-fills USSD (*99#) prompts including UPI ID, amount, and optionally UPI PIN from scanned QR codes.</string>
     <string name="accessibility_prompt_title">Enable USSD Auto-Fill</string>
-    <string name="accessibility_prompt_message">Enable the UPI Offline Assistant accessibility service to automatically fill USSD payment prompts (Send Money, UPI ID, amount). Your UPI PIN is never auto-filled.</string>
+    <string name="accessibility_prompt_message">Enable the UPI Assistant accessibility service to automatically fill USSD payment prompts (Send Money, UPI ID, amount, and UPI PIN if saved).</string>
     <string name="accessibility_prompt_enable">Open Settings</string>
     <string name="accessibility_prompt_skip">Skip</string>
 

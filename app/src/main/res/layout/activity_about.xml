@@ -4,7 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark">
+    android:background="@color/bg_dark"
+    android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
@@ -128,78 +129,6 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp"
                         android:lineSpacingExtra="5dp" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Open Source card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/about_open_source_title"
-                        android:textColor="@color/accent_indigo"
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.08"
-                        android:layout_marginBottom="10dp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/about_open_source"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="14sp"
-                        android:lineSpacingExtra="4dp"
-                        android:layout_marginBottom="14dp" />
-
-                    <!-- GitHub button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnGithub"
-                        android:layout_width="match_parent"
-                        android:layout_height="52dp"
-                        android:text="@string/btn_github"
-                        android:textSize="14sp"
-                        android:fontFamily="sans-serif-medium"
-                        android:layout_marginBottom="8dp"
-                        app:backgroundTint="@color/accent_indigo"
-                        app:cornerRadius="12dp"
-                        app:icon="@drawable/ic_github"
-                        app:iconGravity="textStart"
-                        app:iconPadding="10dp"
-                        app:iconTint="@color/white" />
-
-                    <!-- Telegram button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnTelegram"
-                        android:layout_width="match_parent"
-                        android:layout_height="52dp"
-                        android:text="@string/btn_telegram"
-                        android:textSize="14sp"
-                        android:fontFamily="sans-serif-medium"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        app:cornerRadius="12dp"
-                        app:icon="@drawable/ic_telegram"
-                        app:iconGravity="textStart"
-                        app:iconPadding="10dp"
-                        app:iconTint="@color/accent_indigo"
-                        app:strokeColor="@color/accent_indigo"
-                        android:textColor="@color/accent_indigo" />
 
                 </LinearLayout>
 
