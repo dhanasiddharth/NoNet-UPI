@@ -24,7 +24,9 @@ import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.model.UpiPaymentData
 import com.offlineupi.app.util.formatIndianNumber
+import com.offlineupi.app.util.formatMobileForDisplay
 import com.offlineupi.app.viewmodel.ConfirmationViewModel
+import android.view.View
 
 /**
  * Confirmation screen showing parsed UPI payment details.
@@ -45,7 +47,12 @@ class ConfirmationActivity : AppCompatActivity() {
         const val EXTRA_PAYEE_ADDRESS = "extra_payee_address"
         const val EXTRA_PAYEE_NAME = "extra_payee_name"
         const val EXTRA_AMOUNT = "extra_amount"
+        const val EXTRA_PAYEE_TYPE = "extra_payee_type"
+        const val TYPE_VPA = "vpa"
+        const val TYPE_PHONE = "phone"
     }
+
+    private var payeeType: String = TYPE_VPA
 
     private lateinit var binding: ActivityConfirmationBinding
     private val viewModel: ConfirmationViewModel by viewModels()
@@ -76,6 +83,7 @@ class ConfirmationActivity : AppCompatActivity() {
         val payeeAddress = intent.getStringExtra(EXTRA_PAYEE_ADDRESS)
         val payeeName   = intent.getStringExtra(EXTRA_PAYEE_NAME)
         val amount      = intent.getStringExtra(EXTRA_AMOUNT)
+        payeeType = intent.getStringExtra(EXTRA_PAYEE_TYPE) ?: TYPE_VPA
 
         if (payeeAddress.isNullOrBlank()) { finish(); return }
 
@@ -90,8 +98,17 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     private fun setupUI(data: UpiPaymentData) {
-        binding.tvPayeeName.text = data.payeeName
-        binding.tvUpiId.text    = data.payeeAddress
+        if (payeeType == TYPE_PHONE) {
+            // Phone mode — hide payee name row (name comes from USSD), show phone number
+            binding.labelPayTo.visibility = View.GONE
+            binding.tvPayeeName.visibility = View.GONE
+            binding.dividerPayee.visibility = View.GONE
+            binding.labelUpiId.text = "Phone Number"
+            binding.tvUpiId.text = "+91 ${formatMobileForDisplay(data.payeeAddress)}"
+        } else {
+            binding.tvPayeeName.text = data.payeeName
+            binding.tvUpiId.text = data.payeeAddress
+        }
 
         if (data.hasAmount) {
             binding.tvAmount.text      = getString(R.string.currency_format, formatIndianNumber(data.amount!!))
@@ -146,7 +163,9 @@ class ConfirmationActivity : AppCompatActivity() {
         pendingAmount       = amount
 
         // Set pending payment for auto-fill accessibility service
-        UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks)
+        val mode = if (payeeType == TYPE_PHONE) UssdAccessibilityService.MODE_PAYMENT_PHONE
+        else UssdAccessibilityService.MODE_PAYMENT
+        UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks, mode)
 
         if (!isAccessibilityServiceEnabled()) {
             promptEnableAccessibility(payeeAddress, amount)
@@ -229,6 +248,7 @@ class ConfirmationActivity : AppCompatActivity() {
             putExtra(UssdInstructionActivity.EXTRA_PAYEE_ADDRESS, payeeAddress)
             putExtra(UssdInstructionActivity.EXTRA_AMOUNT, amount)
             putExtra(UssdInstructionActivity.EXTRA_REMARKS, UssdAccessibilityService.pendingRemarks)
+            putExtra(UssdInstructionActivity.EXTRA_PAYEE_TYPE, payeeType)
         })
     }
 }

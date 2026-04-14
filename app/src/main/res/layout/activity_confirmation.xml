@@ -64,6 +64,7 @@
 
                 <!-- Pay To Row -->
                 <TextView
+                    android:id="@+id/labelPayTo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_pay_to"
@@ -85,12 +86,14 @@
 
                 <!-- Divider -->
                 <View
+                    android:id="@+id/dividerPayee"
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:background="@color/divider" />
 
-                <!-- UPI ID Row -->
+                <!-- UPI ID / Phone Row -->
                 <TextView
+                    android:id="@+id/labelUpiId"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_upi_id"

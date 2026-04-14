@@ -2,8 +2,8 @@
     <string name="app_name">UPI Assistant</string>
 
     <!-- About Screen -->
-    <string name="about_description">UPI Assistant lets you scan UPI QR codes and make payments via USSD (*99#). It also tracks your transaction history, account balances, and automates the USSD payment flow.</string>
-    <string name="about_features">• QR scanning\n• Auto-fill USSD payment flow\n• Transaction history and receipts\n• Account balance tracking\n• Missed-call balance check\n• No tracking or analytics</string>
+    <string name="about_description">UPI Assistant lets you pay via USSD (*99#) by scanning a UPI QR code or entering a phone number or UPI ID. It tracks your transaction history and account balances, and automates the USSD payment flow end-to-end.</string>
+    <string name="about_features">• Scan UPI QR codes\n• Pay by phone number or UPI ID (unified input)\n• Auto-fill USSD payment flow\n• UPI PIN auto-fill (stored in memory only)\n• Transaction history with RRN matching\n• Retry failed transactions\n• Account balance tracking\n• Missed-call balance check\n• No tracking or analytics</string>
     <string name="about_privacy_note">This application does NOT process payments directly. UPI PIN is stored in memory only and cleared on reboot. Transaction and balance data is stored encrypted on-device. USSD service availability depends on telecom operator and bank support.</string>
     <string name="about_version_label">Version</string>
     <string name="about_features_title">Features</string>
@@ -39,9 +39,14 @@
     <string name="ussd_step1_done">Send Money selected</string>
     <string name="ussd_step2_pending">Select UPI ID option</string>
     <string name="ussd_step2_done">UPI ID option selected</string>
+    <string name="ussd_step2_pending_phone">Select Mobile No. option</string>
+    <string name="ussd_step2_done_phone">Mobile No. option selected</string>
     <string name="ussd_step3_pending">Enter UPI ID: %1$s</string>
     <string name="ussd_step3_done">UPI ID entered: %1$s</string>
     <string name="ussd_step3_manual">Enter UPI ID: %1$s\n(Long press and paste from clipboard)</string>
+    <string name="ussd_step3_pending_phone">Enter mobile number: %1$s</string>
+    <string name="ussd_step3_done_phone">Mobile number entered: %1$s</string>
+    <string name="ussd_step3_manual_phone">Enter mobile number: %1$s</string>
     <string name="ussd_step4_pending">Enter amount: ₹ %1$s</string>
     <string name="ussd_step4_done">Amount ₹ %1$s entered</string>
     <string name="ussd_step4_no_amount">Enter the payment amount</string>

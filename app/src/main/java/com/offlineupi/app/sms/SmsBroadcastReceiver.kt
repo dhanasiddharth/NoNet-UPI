@@ -48,6 +48,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         val smsAmount = parsed.amount.replace(",", "").trim().toDoubleOrNull() ?: return
 
         val store = TransactionStore(context)
+
+        // If this RRN has already been assigned to a transaction, don't re-map it.
+        if (parsed.rrn != null && store.findByRrn(parsed.rrn) != null) return
+
         val transactions = store.getTransactions()
 
         // Find the most recent transaction that matches and hasn't been confirmed yet

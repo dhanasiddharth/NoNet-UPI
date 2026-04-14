@@ -60,6 +60,42 @@ class TransactionStore(context: Context) {
     fun getTransaction(id: String): Transaction? =
         getTransactions().firstOrNull { it.id == id }
 
+    fun findByRrn(rrn: String): Transaction? =
+        getTransactions().firstOrNull { it.rrn == rrn }
+
+    /**
+     * Ensures each RRN maps to at most one transaction. For groups sharing an RRN,
+     * keeps the newest (largest timestamp) and reverts the rest: clears rrn/balance/
+     * rawSmsText and sets status back to "failure". Returns the number of entries fixed.
+     */
+    fun deduplicateByRrn(): Int {
+        val list = getTransactions().toMutableList()
+        val groups = list.filter { !it.rrn.isNullOrBlank() }.groupBy { it.rrn!! }
+        var fixed = 0
+        groups.forEach { (_, group) ->
+            if (group.size <= 1) return@forEach
+            val duplicates = group.sortedByDescending { it.timestamp }.drop(1)
+            duplicates.forEach { dup ->
+                val idx = list.indexOfFirst { it.id == dup.id }
+                if (idx >= 0) {
+                    list[idx] = dup.copy(
+                        rrn = null,
+                        balance = null,
+                        rawSmsText = null,
+                        status = "failure"
+                    )
+                    fixed++
+                }
+            }
+        }
+        if (fixed > 0) {
+            val arr = JSONArray()
+            list.forEach { arr.put(it.toJson()) }
+            prefs.edit().putString(KEY_TRANSACTIONS, arr.toString()).apply()
+        }
+        return fixed
+    }
+
     companion object {
         private const val FILE_NAME = "secure_transactions"
         private const val KEY_TRANSACTIONS = "transactions"

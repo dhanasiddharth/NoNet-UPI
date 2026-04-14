@@ -52,6 +52,11 @@ class UssdAccessibilityService : AccessibilityService() {
         const val STEP_RESULT_SUCCESS = 7
         const val STEP_RESULT_FAILURE = 8
 
+        // Phone payment flow extra steps
+        const val STEP_MOBILE_SELECTED = 10
+        const val STEP_PHONE_ENTERED = 11
+        const val STEP_NAME_CONFIRMED = 12
+
         // Balance check flow steps
         const val STEP_BALANCE_WELCOME = 100
         const val STEP_BALANCE_SELECTED = 101
@@ -63,8 +68,10 @@ class UssdAccessibilityService : AccessibilityService() {
         const val EXTRA_MODE = "extra_mode"
         const val EXTRA_ACCOUNT_NUMBER = "extra_account_number"
         const val EXTRA_BANK_NAME = "extra_bank_name"
+        const val EXTRA_PAYEE_NAME = "extra_payee_name"
 
         const val MODE_PAYMENT = "payment"
+        const val MODE_PAYMENT_PHONE = "payment_phone"
         const val MODE_BALANCE = "balance"
 
         @Volatile var pendingVpa: String? = null
@@ -75,15 +82,23 @@ class UssdAccessibilityService : AccessibilityService() {
             private set
         @Volatile var pendingMode: String = MODE_PAYMENT
             private set
+        @Volatile var capturedPayeeName: String? = null
+            private set
 
         private val handler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
 
-        fun setPendingPayment(vpa: String, amount: String?, remarks: String? = null) {
+        fun setPendingPayment(
+            vpa: String,
+            amount: String?,
+            remarks: String? = null,
+            mode: String = MODE_PAYMENT
+        ) {
             pendingVpa = vpa
             pendingAmount = amount
             pendingRemarks = remarks
-            pendingMode = MODE_PAYMENT
+            pendingMode = mode
+            capturedPayeeName = null
             resetTimeout()
         }
 
@@ -105,6 +120,7 @@ class UssdAccessibilityService : AccessibilityService() {
             pendingAmount = null
             pendingRemarks = null
             pendingMode = MODE_PAYMENT
+            capturedPayeeName = null
             timeoutRunnable?.let { handler.removeCallbacks(it) }
             timeoutRunnable = null
         }
@@ -191,6 +207,18 @@ class UssdAccessibilityService : AccessibilityService() {
         }
 
         val lower = messageText.lowercase()
+
+        // Pre-PIN error dialog (e.g. "UPI ID is invalid") — surface failure and cancel session
+        if (hasPending() && isPrePinErrorPrompt(lower)) {
+            Log.d(TAG, "Pre-PIN error detected — cancelling USSD and reporting failure")
+            val resultText = messageText.trim()
+            broadcastStep(STEP_RESULT_FAILURE, resultText)
+            clearPending()
+            lastRespondedMessage = messageText
+            val cancelBtn = findButtonByText(root, "cancel") ?: findButtonByText(root, "ok")
+            cancelBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return
+        }
 
         // PIN entry prompt detected
         if (isPinEntryPrompt(lower)) {
@@ -332,13 +360,14 @@ class UssdAccessibilityService : AccessibilityService() {
             setPackage(packageName)
             putExtra(EXTRA_STEP, step)
             putExtra(EXTRA_STEP_LABEL, label)
-            putExtra(EXTRA_MODE, if (step >= 100) MODE_BALANCE else MODE_PAYMENT)
+            putExtra(EXTRA_MODE, if (step >= 100) MODE_BALANCE else pendingMode)
             if (step == STEP_RESULT_SUCCESS || step == STEP_RESULT_FAILURE ||
                 step == STEP_BALANCE_RESULT || step == STEP_BALANCE_FAILURE) {
                 putExtra(EXTRA_RESULT_TEXT, label)
             }
             accountNumber?.let { putExtra(EXTRA_ACCOUNT_NUMBER, it) }
             bankName?.let { putExtra(EXTRA_BANK_NAME, it) }
+            capturedPayeeName?.let { putExtra(EXTRA_PAYEE_NAME, it) }
         })
     }
 
@@ -378,6 +407,9 @@ class UssdAccessibilityService : AccessibilityService() {
         STEP_VPA_ENTERED -> "VPA entered: $response"
         STEP_AMOUNT_ENTERED -> "Amount entered: $response"
         STEP_REMARKS_SKIPPED -> "Remarks skipped"
+        STEP_MOBILE_SELECTED -> "Mobile No. option selected"
+        STEP_PHONE_ENTERED -> "Phone entered: $response"
+        STEP_NAME_CONFIRMED -> capturedPayeeName?.let { "Confirmed: $it" } ?: "Confirmed"
         STEP_BALANCE_SELECTED -> "Check Balance selected"
         else -> ""
     }
@@ -386,6 +418,19 @@ class UssdAccessibilityService : AccessibilityService() {
         if (message.contains("1.") && message.contains("2.")) return false
         return message.contains("enter") && (message.contains("pin") || message.contains("mpin")) ||
                 message.contains("mpin") && !message.contains("1.")
+    }
+
+    /**
+     * Detects USSD error dialogs that occur before PIN entry.
+     * e.g. "the entered UPI ID is invalid", "Invalid mobile number", "not linked to UPI".
+     */
+    private fun isPrePinErrorPrompt(message: String): Boolean {
+        if (message.contains("pin") || message.contains("mpin")) return false
+        val errorKeywords = listOf(
+            "invalid", "incorrect", "not found", "not linked",
+            "not registered", "try again later", "failed"
+        )
+        return errorKeywords.any { message.contains(it) }
     }
 
     /**
@@ -410,13 +455,16 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Scans numbered menu text (e.g. "1. Send Money\n2. Request\n3. Check Balance")
+     * Scans numbered menu text (e.g. "1. Send Money\n2) Request\n3 Check Balance")
      * and returns the number corresponding to the first keyword match.
+     * Supports separators: `.`, `)`, `-`, ` `.
      */
     private fun findMenuOptionNumber(message: String, keywords: List<String>): String? {
-        // Try pattern like "N. <keyword>" or "N.<keyword>"
         for (keyword in keywords) {
-            val pattern = Regex("""(\d+)\.\s*${Regex.escape(keyword)}""", RegexOption.IGNORE_CASE)
+            val pattern = Regex(
+                """(\d+)\s*[.)\-]?\s*${Regex.escape(keyword)}""",
+                RegexOption.IGNORE_CASE
+            )
             val match = pattern.find(message)
             if (match != null) return match.groupValues[1]
         }
@@ -435,39 +483,92 @@ class UssdAccessibilityService : AccessibilityService() {
 
     /**
      * Determines the payment step from USSD menu/prompt text.
+     *
+     * Per NUUP spec (*99*1*…):
+     *   Main menu:           1 Send Money, 2 Request Money, 3 Check Balance, 4 Profile, ...
+     *   Send Money sub-menu: 1 Mobile Number, 3 UPI ID, 4 Saved Beneficiary, 5 Bank A/c
      */
     private fun determinePaymentStepAndResponse(message: String): Pair<Int, String>? {
-        val vpa = pendingVpa ?: return null
+        val payee = pendingVpa ?: return null
         val amount = pendingAmount
-        val isMenu = message.contains("1.") && (message.contains("3.") || message.contains("2."))
+        val isMenu = Regex("""\d+[.)]""").findAll(message).count() >= 2
+        val isPhoneMode = pendingMode == MODE_PAYMENT_PHONE
 
-        return when {
-            // Step 5: Remarks — use user's remarks or "1" to skip
-            message.contains("remark") -> {
-                val remarks = pendingRemarks
-                STEP_REMARKS_SKIPPED to (if (!remarks.isNullOrBlank()) remarks else "1")
+        // Yes/No confirmation dialog — capture beneficiary name and confirm
+        val isYesNo = Regex("""1[.)]?\s*yes""", RegexOption.IGNORE_CASE).containsMatchIn(message) &&
+                Regex("""2[.)]?\s*no""", RegexOption.IGNORE_CASE).containsMatchIn(message)
+        if (isYesNo) {
+            capturedPayeeName = parsePayeeName(message)
+            return STEP_NAME_CONFIRMED to "1"
+        }
+
+        // Remarks prompt (may be non-menu or short menu)
+        if (message.contains("remark")) {
+            val remarks = pendingRemarks
+            return STEP_REMARKS_SKIPPED to (if (!remarks.isNullOrBlank()) remarks else "1")
+        }
+
+        if (isMenu) {
+            // Sub-menu signatures: contains payment method options (mobile/upi/ifsc/saved)
+            val hasMobileOpt = findMenuOptionNumber(message, listOf(
+                "mobile no", "mobile number", "mobile", "phone no", "phone number"
+            ))
+            val hasUpiOpt = findMenuOptionNumber(message, listOf("upi id", "upi", "vpa"))
+            val hasIfscOpt = findMenuOptionNumber(message, listOf("ifsc", "bank a/c", "account"))
+            val hasSavedOpt = findMenuOptionNumber(message, listOf("saved beneficiary", "beneficiary", "saved"))
+            val isPaymentMethodSubMenu = listOf(hasMobileOpt, hasUpiOpt, hasIfscOpt, hasSavedOpt).count { it != null } >= 2
+
+            if (isPaymentMethodSubMenu) {
+                val opt = if (isPhoneMode) (hasMobileOpt ?: "1") else (hasUpiOpt ?: "3")
+                Log.d(TAG, "Payment-method sub-menu: mode=$pendingMode → option $opt")
+                return (if (isPhoneMode) STEP_MOBILE_SELECTED else STEP_UPI_ID_SELECTED) to opt
             }
 
-            // Step 2: "Send Money to:" menu → select UPI ID (always option 3)
-            isMenu && message.contains("send money to") ->
-                STEP_UPI_ID_SELECTED to "3"
+            // Main menu: contains Send Money option
+            val sendMoneyOpt = findMenuOptionNumber(message, listOf("send money", "send"))
+            if (sendMoneyOpt != null && message.lowercase().contains("send money")) {
+                Log.d(TAG, "Main menu → Send Money option $sendMoneyOpt")
+                return STEP_SEND_MONEY to sendMoneyOpt
+            }
+        }
 
-            // Step 1: Main menu → select Send Money (option 1)
-            isMenu && message.contains("send money") ->
-                STEP_SEND_MONEY to "1"
-
-            // Step 4: Enter amount (non-menu prompt)
-            !isMenu && message.contains("amount") ->
+        // Non-menu prompts: identify by keywords in order of specificity
+        return when {
+            // Amount prompt
+            message.contains("amount") ->
                 STEP_AMOUNT_ENTERED to (amount ?: return null)
 
-            // Step 3: Enter VPA (non-menu prompt)
-            !isMenu && (message.contains("vpa") || message.contains("upi") ||
+            // Phone number prompt (phone mode only)
+            isPhoneMode && (message.contains("mobile") || message.contains("phone")) ->
+                STEP_PHONE_ENTERED to payee
+
+            // VPA prompt (VPA mode only)
+            !isPhoneMode && (message.contains("vpa") || message.contains("upi") ||
                 message.contains("virtual payment") || message.contains("beneficiary") ||
                 message.contains("payee")) ->
-                STEP_VPA_ENTERED to vpa
+                STEP_VPA_ENTERED to payee
 
             else -> null
         }
+    }
+
+    /**
+     * Extracts the beneficiary name from a confirmation prompt.
+     * e.g. "Send Rs. 100 to RAM KUMAR? 1. Yes 2. No" → "RAM KUMAR"
+     */
+    private fun parsePayeeName(message: String): String? {
+        val cleaned = message.replace("\n", " ").trim()
+        val patterns = listOf(
+            Regex("""to\s+([A-Za-z][A-Za-z\s.]+?)(?=\s+of\b|\s+for\b|\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE),
+            Regex("""name\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?=\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE),
+            Regex("""beneficiary\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?=\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE)
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(cleaned) ?: continue
+            val name = match.groupValues[1].trim().trimEnd('.', ',')
+            if (name.length in 2..60) return name
+        }
+        return null
     }
 
     /**

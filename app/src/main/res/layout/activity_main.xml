@@ -6,19 +6,17 @@
     android:layout_height="match_parent"
     android:background="@color/bg_dark">
 
-    <!-- App Icon / Logo area -->
+    <!-- Top: branding -->
     <ImageView
         android:id="@+id/ivLogo"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
         android:src="@drawable/ic_upi_logo"
         android:contentDescription="@string/app_name"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintVertical_chainStyle="packed"
-        app:layout_constraintBottom_toTopOf="@id/tvAppTitle"
-        android:layout_marginTop="80dp" />
+        android:layout_marginTop="56dp" />
 
     <TextView
         android:id="@+id/tvAppTitle"
@@ -26,30 +24,38 @@
         android:layout_height="wrap_content"
         android:text="@string/app_name"
         android:textColor="@color/text_primary"
-        android:textSize="26sp"
+        android:textSize="24sp"
         android:textStyle="bold"
         android:fontFamily="sans-serif-medium"
         app:layout_constraintTop_toBottomOf="@id/ivLogo"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/tvAppSubtitle"
-        android:layout_marginTop="16dp" />
+        android:layout_marginTop="12dp" />
 
     <TextView
-        android:id="@+id/tvAppSubtitle"
-        android:layout_width="280dp"
+        android:id="@+id/tvOfflineBadge"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/home_subtitle"
-        android:textColor="@color/text_secondary"
-        android:textSize="14sp"
-        android:textAlignment="center"
-        android:lineSpacingExtra="4dp"
+        android:text="@string/offline_badge"
+        android:textColor="@color/accent_green"
+        android:textSize="12sp"
+        android:background="@drawable/bg_badge"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
         app:layout_constraintTop_toBottomOf="@id/tvAppTitle"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/btnScanQr"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="12dp" />
 
+    <!-- Guideline: split top (branding) and bottom (actions) at 45% -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guidelineMid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.45" />
+
+    <!-- Bottom half: actions -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnScanQr"
         android:layout_width="0dp"
@@ -62,30 +68,100 @@
         app:icon="@drawable/ic_qr_scan"
         app:iconGravity="textStart"
         app:iconPadding="8dp"
-        app:layout_constraintTop_toBottomOf="@id/tvAppSubtitle"
+        app:layout_constraintTop_toBottomOf="@id/guidelineMid"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/tvOfflineBadge"
-        android:layout_marginTop="40dp"
+        android:layout_marginTop="16dp"
         android:layout_marginStart="32dp"
         android:layout_marginEnd="32dp" />
 
+    <!-- OR divider -->
+    <View
+        android:id="@+id/dividerLeft"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        app:layout_constraintTop_toTopOf="@id/tvOrLabel"
+        app:layout_constraintBottom_toBottomOf="@id/tvOrLabel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/tvOrLabel"
+        android:layout_marginStart="48dp"
+        android:layout_marginEnd="12dp" />
+
     <TextView
-        android:id="@+id/tvOfflineBadge"
+        android:id="@+id/tvOrLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/offline_badge"
-        android:textColor="@color/accent_green"
+        android:text="OR"
+        android:textColor="@color/text_secondary"
         android:textSize="12sp"
-        android:background="@drawable/bg_badge"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="4dp"
+        android:letterSpacing="0.1"
         app:layout_constraintTop_toBottomOf="@id/btnScanQr"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="60dp" />
+        android:layout_marginTop="20dp" />
+
+    <View
+        android:id="@+id/dividerRight"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        app:layout_constraintTop_toTopOf="@id/tvOrLabel"
+        app:layout_constraintBottom_toBottomOf="@id/tvOrLabel"
+        app:layout_constraintStart_toEndOf="@id/tvOrLabel"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="48dp" />
+
+    <!-- Unified payee input (phone number OR UPI ID) -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilPayee"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="Phone number or UPI ID"
+        app:boxStrokeColor="@color/accent_indigo"
+        app:hintTextColor="@color/text_secondary"
+        app:layout_constraintTop_toBottomOf="@id/tvOrLabel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="20dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etPayee"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textEmailAddress"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:maxLines="1"
+            android:imeOptions="actionDone" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnPay"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:text="Pay"
+        android:textSize="16sp"
+        android:fontFamily="sans-serif-medium"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        app:strokeColor="@color/accent_indigo"
+        app:strokeWidth="1dp"
+        app:cornerRadius="16dp"
+        app:iconGravity="textStart"
+        app:iconPadding="8dp"
+        app:iconTint="@color/accent_indigo"
+        android:textColor="@color/accent_indigo"
+        app:layout_constraintTop_toBottomOf="@id/tilPayee"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp" />
 
     <!-- Bottom row: History, Accounts, About -->
     <com.google.android.material.button.MaterialButton
