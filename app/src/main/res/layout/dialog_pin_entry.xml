@@ -6,24 +6,53 @@
     android:layout_height="match_parent"
     android:background="@color/bg_dark">
 
-    <!-- Title + dots at top -->
+    <!-- Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
         android:layout_gravity="top"
-        android:paddingTop="80dp"
-        android:paddingHorizontal="24dp">
+        android:paddingTop="72dp"
+        android:paddingHorizontal="28dp">
+
+        <!-- Bank / account chip -->
+        <LinearLayout
+            android:id="@+id/pinBankChip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_badge"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="7dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔒"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:id="@+id/tvPinBank"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pin_dialog_title"
+                android:textColor="@color/text_secondary_light"
+                android:textSize="12.5sp"
+                android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/pin_dialog_title"
+            android:text="@string/pin_enter_heading"
             android:textColor="@color/text_primary"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold"
-            android:textAlignment="center" />
+            android:textAlignment="center"
+            android:layout_marginTop="20dp" />
 
         <TextView
             android:layout_width="match_parent"
@@ -32,214 +61,85 @@
             android:textColor="@color/text_secondary"
             android:textSize="13sp"
             android:textAlignment="center"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="6dp" />
 
-        <!-- PIN dots display -->
+        <!-- PIN dots -->
         <TextView
             android:id="@+id/tvPinDots"
-            android:layout_width="280dp"
-            android:layout_height="56dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:gravity="center"
-            android:textColor="@color/text_primary"
-            android:textSize="32sp"
-            android:letterSpacing="0.3"
+            android:textColor="@color/accent_emerald_light"
+            android:textSize="28sp"
+            android:letterSpacing="0.35"
             android:fontFamily="monospace"
-            android:background="@drawable/bg_pin_field"
-            android:layout_marginTop="32dp" />
+            android:layout_marginTop="36dp" />
 
     </LinearLayout>
 
-    <!-- Keypad pinned to bottom -->
+    <!-- Keypad + submit pinned to bottom -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
         android:layout_gravity="bottom"
-        android:paddingBottom="32dp"
-        android:paddingHorizontal="16dp"
-        android:background="@color/bg_dark">
+        android:paddingBottom="28dp"
+        android:paddingHorizontal="20dp">
 
-        <!-- Row 1: 1 2 3 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn1" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="1" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn2" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="2" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn3" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="3" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn4" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="4" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn5" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="5" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn6" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="6" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn7" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="7" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn8" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="8" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn9" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="9" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="4dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn1"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="1"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn2"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="2"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn3"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="3"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
+            android:layout_marginBottom="16dp">
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnClear" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="@string/pin_clear" android:textSize="14sp" android:textColor="@color/accent_amber" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btn0" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="0" android:textSize="26sp" android:textColor="@color/text_primary" android:insetTop="0dp" android:insetBottom="0dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnBackspace" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="66dp" android:text="@string/pin_backspace" android:textSize="22sp" android:textColor="@color/text_secondary" android:insetTop="0dp" android:insetBottom="0dp" />
         </LinearLayout>
 
-        <!-- Row 2: 4 5 6 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="4dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn4"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="4"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn5"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="5"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn6"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="6"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-        </LinearLayout>
-
-        <!-- Row 3: 7 8 9 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="4dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn7"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="7"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn8"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="8"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn9"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="9"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-        </LinearLayout>
-
-        <!-- Row 4: [clear] 0 [backspace] -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="12dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnClear"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="@string/pin_clear"
-                android:textSize="14sp"
-                android:textColor="@color/accent_amber"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn0"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="0"
-                android:textSize="24sp"
-                android:textColor="@color/text_primary"
-                android:layout_marginHorizontal="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnBackspace"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="60dp"
-                android:text="@string/pin_backspace"
-                android:textSize="20sp"
-                android:textColor="@color/text_secondary"
-                android:layout_marginHorizontal="4dp" />
-        </LinearLayout>
-
-        <!-- Submit button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSubmitPin"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:text="@string/pin_submit"
             android:textSize="16sp"
+            android:textColor="@color/on_accent"
             android:fontFamily="sans-serif-medium"
             android:enabled="false"
-            app:backgroundTint="@color/accent_indigo"
+            app:backgroundTint="@color/accent_emerald"
             app:cornerRadius="16dp"
-            android:layout_marginHorizontal="16dp" />
+            android:layout_marginHorizontal="4dp" />
 
     </LinearLayout>
 

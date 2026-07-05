@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_pay" android:icon="@drawable/ic_nav_pay" android:title="Pay" />
+    <item android:id="@+id/nav_portfolio" android:icon="@drawable/ic_nav_portfolio" android:title="Money" />
+    <item android:id="@+id/nav_money" android:icon="@drawable/ic_nav_money" android:title="Bank" />
+    <item android:id="@+id/nav_more" android:icon="@drawable/ic_nav_more" android:title="More" />
+</menu>

@@ -1,124 +1,108 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.offlineupi.app.R
 import com.offlineupi.app.data.Transaction
 import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.databinding.ActivityTransactionHistoryBinding
-import com.offlineupi.app.util.formatIndianNumber
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
+/** Dedicated transactions list with search and status filters. */
 class TransactionHistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTransactionHistoryBinding
+    private lateinit var all: List<Transaction>
+
+    private var query = ""
+    private var statusFilter: String? = null // null = all
+
+    private val filters = listOf(
+        "All" to null,
+        "Verified" to "success",
+        "Pending" to "pending",
+        "Reversed" to "reversed",
+        "Failed" to "failure",
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityTransactionHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.setDisplayShowHomeEnabled(true)
+        binding.rvTransactions.layoutManager = LinearLayoutManager(this)
+        binding.etSearch.doAfterTextChanged {
+            query = it?.toString().orEmpty().trim()
+            refresh()
+        }
+        buildFilterChips()
+    }
 
-        val store = TransactionStore(this)
-        val transactions = store.getTransactions()
+    override fun onResume() {
+        super.onResume()
+        all = TransactionStore(this).getTransactions().filter { it.type == "payment" }
+        refresh()
+    }
 
-        if (transactions.isEmpty()) {
-            binding.tvEmpty.visibility = View.VISIBLE
-            binding.rvTransactions.visibility = View.GONE
-        } else {
-            binding.tvEmpty.visibility = View.GONE
-            binding.rvTransactions.visibility = View.VISIBLE
-            binding.rvTransactions.layoutManager = LinearLayoutManager(this)
-            binding.rvTransactions.adapter = TransactionAdapter(transactions) { txn ->
-                startActivity(Intent(this, TransactionReceiptActivity::class.java).apply {
-                    putExtra(TransactionReceiptActivity.EXTRA_TRANSACTION_ID, txn.id)
-                })
+    private fun buildFilterChips() {
+        binding.filterRow.removeAllViews()
+        filters.forEach { (label, status) ->
+            val chip = TextView(this).apply {
+                text = label
+                textSize = 13f
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                gravity = android.view.Gravity.CENTER
+                minHeight = dp(38)
+                setPadding(dp(14), dp(7), dp(14), dp(7))
+                foreground = getDrawable(R.drawable.ripple_pill)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = dp(8) }
+                setOnClickListener {
+                    statusFilter = status
+                    styleChips()
+                    refresh()
+                }
             }
+            binding.filterRow.addView(chip)
+        }
+        styleChips()
+    }
+
+    private fun styleChips() {
+        filters.forEachIndexed { i, (_, status) ->
+            val chip = binding.filterRow.getChildAt(i) as TextView
+            val active = status == statusFilter
+            chip.setBackgroundResource(if (active) R.drawable.bg_pill_active else R.drawable.bg_input_pill)
+            chip.setTextColor(getColor(if (active) R.color.accent_emerald_light else R.color.text_secondary))
         }
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        onBackPressedDispatcher.onBackPressed()
-        return true
+    private fun refresh() {
+        val q = query.lowercase()
+        val filtered = all.filter { t ->
+            (statusFilter == null || t.status == statusFilter) &&
+                (q.isEmpty() ||
+                    t.payeeName?.lowercase()?.contains(q) == true ||
+                    t.payeeAddress?.lowercase()?.contains(q) == true ||
+                    t.amount?.contains(q) == true ||
+                    t.rrn?.contains(q) == true)
+        }
+        binding.tvEmpty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
+        binding.rvTransactions.adapter = FeedAdapter(buildFeedItems(filtered)) { txn ->
+            startActivity(Intent(this, TransactionReceiptActivity::class.java).apply {
+                putExtra(TransactionReceiptActivity.EXTRA_TRANSACTION_ID, txn.id)
+            })
+        }
     }
 
-    private class TransactionAdapter(
-        private val items: List<Transaction>,
-        private val onClick: (Transaction) -> Unit
-    ) : RecyclerView.Adapter<TransactionAdapter.ViewHolder>() {
-
-        private val dateFormat = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-
-        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val tvStatusIcon: TextView = view.findViewById(R.id.tvStatusIcon)
-            val tvPayee: TextView = view.findViewById(R.id.tvPayee)
-            val tvDateTime: TextView = view.findViewById(R.id.tvDateTime)
-            val tvAmount: TextView = view.findViewById(R.id.tvAmount)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_transaction, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val txn = items[position]
-
-            // Status icon
-            when (txn.status) {
-                "success" -> {
-                    holder.tvStatusIcon.text = "\u2713"
-                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
-                }
-                "reversed" -> {
-                    holder.tvStatusIcon.text = "\u21a9"
-                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                }
-                "pending" -> {
-                    holder.tvStatusIcon.text = "\u2026"
-                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                }
-                else -> {
-                    holder.tvStatusIcon.text = "!"
-                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                }
-            }
-
-            // Payee
-            holder.tvPayee.text = txn.payeeAddress ?: "Payment"
-
-            // Date
-            holder.tvDateTime.text = dateFormat.format(Date(txn.timestamp))
-
-            // Amount
-            val amount = txn.amount
-            if (!amount.isNullOrBlank()) {
-                holder.tvAmount.text = "\u20B9 ${formatIndianNumber(amount)}"
-                holder.tvAmount.setTextColor(
-                    holder.itemView.context.getColor(
-                        if (txn.status == "success") R.color.accent_green else R.color.accent_amber
-                    )
-                )
-            } else {
-                holder.tvAmount.text = "-"
-            }
-
-            holder.itemView.setOnClickListener { onClick(txn) }
-        }
-
-        override fun getItemCount() = items.size
-    }
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 }

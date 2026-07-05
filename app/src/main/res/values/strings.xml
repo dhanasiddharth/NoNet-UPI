@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">UPI Assistant</string>
+    <string name="app_name">Finance</string>
 
     <!-- About Screen -->
     <string name="about_description">UPI Assistant lets you pay via USSD (*99#) by scanning a UPI QR code or entering a phone number or UPI ID. It tracks your transaction history and account balances, and automates the USSD payment flow end-to-end.</string>
@@ -27,7 +27,7 @@
     <string name="hint_enter_amount">Enter Amount</string>
     <string name="currency_format">₹ %1$s</string>
     <string name="btn_pay_ussd">Pay via USSD (*99#)</string>
-    <string name="confirm_security_note">🔒 Your UPI PIN is held in memory only and cleared on reboot.</string>
+    <string name="confirm_security_note">Your UPI PIN is held in memory only and cleared on reboot.</string>
     <string name="toast_dial_fallback">Call permission denied — please dial *99# manually.</string>
     <string name="toast_upi_copied">UPI ID copied to clipboard</string>
 
@@ -74,11 +74,14 @@
     <string name="ussd_clipboard_copied_badge">UPI ID copied to clipboard</string>
     <string name="ussd_security_note">This app does not replace official UPI apps. All data is stored encrypted on-device only.</string>
     <string name="btn_done">Done</string>
+    <string name="btn_retry_transaction">Retry payment</string>
+    <string name="btn_done_verify_background">Done — verify in background</string>
     <string name="btn_retry">Retry Transaction</string>
     <string name="ussd_subtitle_retrying">Retrying… *99# has been re-dialed.</string>
 
     <!-- PIN Entry -->
-    <string name="pin_dialog_title">Enter UPI PIN</string>
+    <string name="pin_dialog_title">UPI PIN</string>
+    <string name="pin_enter_heading">Enter UPI PIN</string>
     <string name="pin_dialog_subtitle">4 or 6 digit PIN · Stored in memory only until reboot</string>
     <string name="pin_submit">Continue</string>
     <string name="pin_clear">Clear</string>

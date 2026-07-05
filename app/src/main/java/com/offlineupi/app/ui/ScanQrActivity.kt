@@ -1,5 +1,7 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -49,10 +51,10 @@ class ScanQrActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScanQrBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        binding.btnBack.setOnClickListener { finish() }
 
         observeViewModel()
         checkCameraPermission()

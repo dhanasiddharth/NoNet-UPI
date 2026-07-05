@@ -1,30 +1,37 @@
 <resources>
-    <!-- Dark background palette -->
-    <color name="bg_dark">#0F1117</color>
+    <!-- Emerald-on-green-black palette (UPI Assistant 2.0) -->
+
+    <!-- Backgrounds -->
+    <color name="bg_dark">#0A0F0D</color>
+    <color name="bg_elevated">#101815</color>
     <color name="bg_scanner">#000000</color>
     <color name="scanner_overlay">#CC000000</color>
 
     <!-- Card -->
-    <color name="card_bg">#1A1D27</color>
-    <color name="card_stroke">#2A2D3E</color>
-    <color name="divider">#2A2D3E</color>
+    <color name="card_bg">#131A16</color>
+    <color name="card_raised">#192420</color>
+    <color name="card_stroke">#24302A</color>
+    <color name="divider">#212B26</color>
 
     <!-- Text -->
-    <color name="text_primary">#F0F2FF</color>
-    <color name="text_secondary">#7A7F9A</color>
-    <color name="text_secondary_light">#AAAACC</color>
+    <color name="text_primary">#ECF2EF</color>
+    <color name="text_secondary">#94A49C</color>
+    <color name="text_secondary_light">#B7C4BD</color>
     <color name="white">#FFFFFF</color>
 
-    <!-- Accent - Indigo -->
-    <color name="accent_indigo">#5C6BC0</color>
-    <color name="accent_indigo_light">#9FA8DA</color>
+    <!-- Brand accent - Emerald (buttons keep the historical name to avoid churn) -->
+    <color name="accent_indigo">#0E9E6E</color>
+    <color name="accent_indigo_light">#34D88F</color>
+    <color name="accent_emerald">#0E9E6E</color>
+    <color name="accent_emerald_light">#34D88F</color>
+    <color name="on_accent">#FFFFFF</color>
 
-    <!-- Accent - Green (success) -->
-    <color name="accent_green">#4CAF82</color>
-
-    <!-- Accent - Amber (warning/disclaimer) -->
-    <color name="accent_amber">#FFB74D</color>
+    <!-- Semantic status -->
+    <color name="accent_green">#34D88F</color>
+    <color name="accent_amber">#F0A44B</color>
+    <color name="accent_red">#F26A5B</color>
+    <color name="status_progress">#7C8D85</color>
 
     <!-- Disclaimer card -->
-    <color name="disclaimer_bg">#1F1A10</color>
+    <color name="disclaimer_bg">#151F12</color>
 </resources>

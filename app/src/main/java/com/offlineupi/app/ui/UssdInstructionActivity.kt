@@ -1,5 +1,7 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -132,6 +134,7 @@ class UssdInstructionActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityUssdInstructionBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
         transactionStore = TransactionStore(this)
         accountStore = AccountStore(this)
@@ -151,7 +154,6 @@ class UssdInstructionActivity : AppCompatActivity() {
 
         // Back (toolbar or gesture) goes straight home — not back through
         // the confirmation/scanner screens of a finished transaction.
-        binding.toolbar.setNavigationOnClickListener { goHome() }
         onBackPressedDispatcher.addCallback(this) { goHome() }
 
         updateTitleWithName()
@@ -183,8 +185,10 @@ class UssdInstructionActivity : AppCompatActivity() {
 
     /** Once the recipient name is known, show it as the screen title. */
     private fun updateTitleWithName() {
-        binding.toolbar.title = capturedPayeeName?.takeIf { it.isNotBlank() }
-            ?: getString(R.string.ussd_title)
+        binding.tvPayingName.text = capturedPayeeName?.takeIf { it.isNotBlank() }
+            ?: payeeAddress.ifBlank { getString(R.string.ussd_title) }
+        binding.tvPayingAmount.text =
+            amount?.takeIf { it.isNotBlank() }?.let { "₹${formatIndianNumber(it)}" } ?: "—"
     }
 
     private fun goHome() {

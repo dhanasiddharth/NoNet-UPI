@@ -1,14 +1,31 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme -->
-    <style name="Theme.OfflineUPI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/accent_indigo</item>
-        <item name="colorPrimaryVariant">@color/accent_indigo_light</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <item name="colorSurface">@color/card_bg</item>
+    <!-- Base application theme — Material 3, dark emerald -->
+    <style name="Theme.OfflineUPI" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary = emerald actions -->
+        <item name="colorPrimary">@color/accent_emerald</item>
+        <item name="colorOnPrimary">@color/on_accent</item>
+        <item name="colorPrimaryContainer">@color/card_raised</item>
+        <item name="colorOnPrimaryContainer">@color/accent_emerald_light</item>
+
+        <!-- Secondary container drives the bottom-nav active indicator -->
+        <item name="colorSecondaryContainer">@color/card_raised</item>
+        <item name="colorOnSecondaryContainer">@color/accent_emerald_light</item>
+
+        <!-- Surfaces -->
+        <item name="android:colorBackground">@color/bg_dark</item>
+        <item name="colorSurface">@color/bg_dark</item>
         <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/card_bg</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorSurfaceContainer">@color/card_bg</item>
+        <item name="colorSurfaceContainerLow">@color/card_bg</item>
+        <item name="colorSurfaceContainerHigh">@color/card_raised</item>
+        <item name="colorOutline">@color/card_stroke</item>
+        <item name="colorOutlineVariant">@color/divider</item>
+
         <item name="android:windowBackground">@color/bg_dark</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="View all transactions"
+    android:textColor="@color/accent_emerald_light"
+    android:textSize="13.5sp"
+    android:fontFamily="sans-serif-medium"
+    android:gravity="center"
+    android:foreground="@drawable/ripple_pill"
+    android:background="@drawable/bg_input_pill"
+    android:paddingVertical="12dp"
+    android:layout_marginTop="10dp"
+    android:layout_marginBottom="6dp" />

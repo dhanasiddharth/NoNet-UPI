@@ -11,254 +11,231 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="56dp"
-        android:paddingBottom="32dp"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="40dp"
+        android:paddingBottom="28dp"
         android:gravity="center_horizontal">
 
         <!-- Shareable receipt card -->
-        <com.google.android.material.card.MaterialCardView
+        <LinearLayout
             android:id="@+id/cardReceipt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/card_bg"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/card_stroke"
-            app:strokeWidth="1dp">
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:background="@drawable/bg_receipt_card"
+            android:paddingHorizontal="22dp"
+            android:paddingTop="30dp"
+            android:paddingBottom="24dp">
 
+            <!-- Avatar with status badge -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/tvAvatar"
+                    android:layout_width="66dp"
+                    android:layout_height="66dp"
+                    android:gravity="center"
+                    android:text="?"
+                    android:textColor="@color/accent_emerald_light"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_avatar_emerald" />
+
+                <ImageView
+                    android:id="@+id/tvStatusIcon"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="bottom|end"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_status_check"
+                    app:tint="@color/white"
+                    android:contentDescription="Status"
+                    android:background="@drawable/bg_status_success" />
+            </FrameLayout>
+
+            <!-- Payee name -->
+            <TextView
+                android:id="@+id/tvPayeeName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:textAlignment="center"
+                android:layout_marginTop="14dp" />
+
+            <!-- Amount -->
+            <TextView
+                android:id="@+id/tvAmount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="38sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginTop="6dp" />
+
+            <!-- Status word + timestamp -->
+            <TextView
+                android:id="@+id/tvStatusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textAlignment="center"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/tvDateTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp"
+                android:textAlignment="center"
+                android:layout_marginTop="3dp" />
+
+            <!-- Reversal / refund block -->
+            <LinearLayout
+                android:id="@+id/layoutReversal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_detail_group"
+                android:padding="14dp"
+                android:layout_marginTop="18dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="REVERSED · REFUNDED"
+                    android:textColor="@color/accent_amber"
+                    android:textSize="11sp"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.08"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:id="@+id/tvReversalNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/text_secondary_light"
+                    android:textSize="12.5sp"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/tvReversalRrn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="4dp"
+                    android:textIsSelectable="true" />
+            </LinearLayout>
+
+            <!-- Details group -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp"
-                android:gravity="center_horizontal">
+                android:background="@drawable/bg_detail_group"
+                android:padding="16dp"
+                android:layout_marginTop="18dp">
 
-                <!-- Status Icon -->
+                <!-- To -->
                 <TextView
-                    android:id="@+id/tvStatusIcon"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:gravity="center"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/white" />
-
-                <!-- Status Text -->
-                <TextView
-                    android:id="@+id/tvStatusText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium"
-                    android:layout_marginTop="12dp" />
-
-                <!-- Amount (large, prominent) -->
+                    android:text="TO"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10.5sp"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.08" />
                 <TextView
-                    android:id="@+id/tvAmount"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvPayee"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/text_primary"
-                    android:textSize="32sp"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium"
-                    android:layout_marginTop="4dp" />
+                    android:textSize="14sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="2dp" />
 
-                <!-- RRN (prominent) -->
-                <LinearLayout
-                    android:id="@+id/layoutRrn"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:background="@drawable/bg_pin_field"
-                    android:padding="16dp"
-                    android:layout_marginTop="20dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="RRN / REFERENCE NUMBER"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
-                        android:textAllCaps="true"
-                        android:letterSpacing="0.08" />
-
-                    <TextView
-                        android:id="@+id/tvRrn"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/text_primary"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        android:fontFamily="monospace"
-                        android:layout_marginTop="4dp"
-                        android:textIsSelectable="true" />
-
-                </LinearLayout>
-
-                <!-- Reversal / Refund block (shown only for reversed payments) -->
-                <LinearLayout
-                    android:id="@+id/layoutReversal"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:background="@drawable/bg_pin_field"
-                    android:padding="16dp"
-                    android:layout_marginTop="12dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="REVERSED / REFUNDED"
-                        android:textColor="@color/accent_amber"
-                        android:textSize="11sp"
-                        android:textAllCaps="true"
-                        android:letterSpacing="0.08" />
-
-                    <TextView
-                        android:id="@+id/tvReversalNote"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:layout_marginTop="4dp" />
-
-                    <TextView
-                        android:id="@+id/tvReversalRrn"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:fontFamily="monospace"
-                        android:layout_marginTop="4dp"
-                        android:textIsSelectable="true" />
-
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider"
-                    android:layout_marginTop="20dp" />
-
-                <!-- Details grid -->
-                <!-- From Account -->
+                <!-- From account -->
                 <LinearLayout
                     android:id="@+id/layoutAccount"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginTop="16dp">
-
+                    android:layout_marginTop="14dp">
+                    <View
+                        android:id="@+id/dividerAccount"
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginBottom="14dp" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="FROM ACCOUNT"
                         android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
+                        android:textSize="10.5sp"
                         android:textAllCaps="true"
                         android:letterSpacing="0.08" />
-
                     <TextView
                         android:id="@+id/tvAccount"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textColor="@color/text_primary"
-                        android:textSize="15sp"
+                        android:textSize="14sp"
                         android:layout_marginTop="2dp" />
-
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/dividerAccount"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider"
-                    android:layout_marginTop="16dp" />
-
-                <!-- To (Payee) -->
+                <!-- UPI transaction ID -->
                 <LinearLayout
+                    android:id="@+id/layoutRrn"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginTop="16dp">
-
+                    android:layout_marginTop="14dp"
+                    android:visibility="gone">
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginBottom="14dp" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="TO"
+                        android:text="UPI TRANSACTION ID"
                         android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
+                        android:textSize="10.5sp"
                         android:textAllCaps="true"
                         android:letterSpacing="0.08" />
-
                     <TextView
-                        android:id="@+id/tvPayeeName"
-                        android:layout_width="wrap_content"
+                        android:id="@+id/tvRrn"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold"
-                        android:fontFamily="sans-serif-medium"
-                        android:layout_marginTop="2dp"
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/tvPayee"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/accent_indigo_light"
-                        android:textSize="15sp"
                         android:fontFamily="monospace"
-                        android:layout_marginTop="2dp" />
-
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider"
-                    android:layout_marginTop="16dp" />
-
-                <!-- Date & Time -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:layout_marginTop="16dp">
-
+                        android:layout_marginTop="2dp"
+                        android:textIsSelectable="true" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="DATE &amp; TIME"
-                        android:textColor="@color/text_secondary"
+                        android:text="Tap to copy"
+                        android:textColor="@color/accent_emerald_light"
                         android:textSize="11sp"
-                        android:textAllCaps="true"
-                        android:letterSpacing="0.08" />
-
-                    <TextView
-                        android:id="@+id/tvDateTime"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:layout_marginTop="2dp" />
-
+                        android:layout_marginTop="3dp" />
                 </LinearLayout>
-
-                <View
-                    android:id="@+id/dividerRemarks"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider"
-                    android:layout_marginTop="16dp" />
 
                 <!-- Remarks -->
                 <LinearLayout
@@ -266,32 +243,44 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginTop="16dp">
-
+                    android:layout_marginTop="14dp">
+                    <View
+                        android:id="@+id/dividerRemarks"
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginBottom="14dp" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="REMARKS"
                         android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
+                        android:textSize="10.5sp"
                         android:textAllCaps="true"
                         android:letterSpacing="0.08" />
-
                     <TextView
                         android:id="@+id/tvRemarks"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textColor="@color/text_primary"
-                        android:textSize="15sp"
+                        android:textSize="14sp"
                         android:layout_marginTop="2dp" />
-
                 </LinearLayout>
 
             </LinearLayout>
 
-        </com.google.android.material.card.MaterialCardView>
+            <!-- App wordmark on the shareable card -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Paid via UPI · *99#"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:layout_marginTop="16dp" />
 
-        <!-- Balance after (hidden behind eye) -->
+        </LinearLayout>
+
+        <!-- Balance after (hidden behind eye, outside shareable card) -->
         <LinearLayout
             android:id="@+id/layoutBalance"
             android:layout_width="match_parent"
@@ -299,15 +288,14 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:layout_marginTop="16dp"
+            android:paddingHorizontal="6dp"
             android:visibility="gone">
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Balance after: "
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
-
             <TextView
                 android:id="@+id/tvBalance"
                 android:layout_width="0dp"
@@ -315,7 +303,6 @@
                 android:layout_weight="1"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
-
             <ImageView
                 android:id="@+id/ivToggleBalance"
                 android:layout_width="20dp"
@@ -323,54 +310,69 @@
                 android:src="@drawable/ic_visibility_off"
                 app:tint="@color/text_secondary"
                 android:contentDescription="Toggle balance" />
-
         </LinearLayout>
+
+        <!-- Add UPI ID to a contact (shown for UPI-ID payees only) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddToContact"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="Add UPI ID to contact"
+            android:textSize="14sp"
+            android:textColor="@color/accent_emerald_light"
+            android:fontFamily="sans-serif-medium"
+            app:strokeColor="@color/card_stroke"
+            app:cornerRadius="14dp"
+            android:layout_marginTop="16dp"
+            android:visibility="gone" />
 
         <!-- Share Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnShare"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="Share Receipt"
+            android:text="Share receipt"
             android:textSize="16sp"
+            android:textColor="@color/on_accent"
+            app:iconTint="@color/on_accent"
             android:fontFamily="sans-serif-medium"
-            app:backgroundTint="@color/accent_indigo"
+            app:backgroundTint="@color/accent_emerald"
             app:cornerRadius="16dp"
             app:icon="@drawable/ic_share"
             app:iconGravity="textStart"
             app:iconPadding="8dp"
-            android:layout_marginTop="20dp" />
+            android:layout_marginTop="22dp" />
 
         <!-- Check Status Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCheckStatus"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="Check Status from SMS"
+            android:text="Check status from SMS"
             android:textSize="16sp"
+            android:textColor="@color/accent_emerald_light"
             android:fontFamily="sans-serif-medium"
-            app:backgroundTint="@color/card_bg"
-            app:strokeColor="@color/accent_indigo"
+            app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             app:cornerRadius="16dp"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="10dp"
             android:visibility="gone" />
 
         <!-- Done Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDone"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="52dp"
             android:text="@string/btn_done"
-            android:textSize="16sp"
+            android:textSize="15sp"
+            android:textColor="@color/text_secondary_light"
             android:fontFamily="sans-serif-medium"
-            app:backgroundTint="@color/card_bg"
-            app:strokeColor="@color/accent_indigo"
-            app:strokeWidth="1dp"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            app:cornerRadius="16dp"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="6dp" />
 
     </LinearLayout>
 

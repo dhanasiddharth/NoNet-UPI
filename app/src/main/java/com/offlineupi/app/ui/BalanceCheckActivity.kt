@@ -1,5 +1,7 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -76,6 +78,7 @@ class BalanceCheckActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityBalanceCheckBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
         balanceStore = SecureBalanceStore(this)
         accountStore = AccountStore(this)

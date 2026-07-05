@@ -5,15 +5,15 @@
     android:viewportHeight="260">
     <!-- Corner brackets for scan frame -->
     <!-- Top-left -->
-    <path android:strokeColor="#5C6BC0" android:strokeWidth="4" android:fillColor="#00000000"
+    <path android:strokeColor="#34D88F" android:strokeWidth="4" android:fillColor="#00000000"
         android:pathData="M40,80 L40,40 L80,40"/>
     <!-- Top-right -->
-    <path android:strokeColor="#5C6BC0" android:strokeWidth="4" android:fillColor="#00000000"
+    <path android:strokeColor="#34D88F" android:strokeWidth="4" android:fillColor="#00000000"
         android:pathData="M180,40 L220,40 L220,80"/>
     <!-- Bottom-left -->
-    <path android:strokeColor="#5C6BC0" android:strokeWidth="4" android:fillColor="#00000000"
+    <path android:strokeColor="#34D88F" android:strokeWidth="4" android:fillColor="#00000000"
         android:pathData="M40,180 L40,220 L80,220"/>
     <!-- Bottom-right -->
-    <path android:strokeColor="#5C6BC0" android:strokeWidth="4" android:fillColor="#00000000"
+    <path android:strokeColor="#34D88F" android:strokeWidth="4" android:fillColor="#00000000"
         android:pathData="M220,180 L220,220 L180,220"/>
 </vector>

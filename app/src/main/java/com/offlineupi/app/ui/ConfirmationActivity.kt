@@ -1,5 +1,7 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -24,6 +26,7 @@ import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.data.RecipientStore
 import com.offlineupi.app.model.UpiPaymentData
+import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.UssdCodeBuilder
 import com.offlineupi.app.util.formatIndianNumber
 import com.offlineupi.app.util.formatMobileForDisplay
@@ -88,6 +91,7 @@ class ConfirmationActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityConfirmationBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
         recipientStore = RecipientStore(this)
 
@@ -123,12 +127,16 @@ class ConfirmationActivity : AppCompatActivity() {
         if (payeeType == TYPE_PHONE) {
             binding.labelUpiId.text = "Phone Number"
             binding.tvUpiId.text = "+91 ${formatMobileForDisplay(data.payeeAddress)}"
-            if (!knownRecipientName.isNullOrBlank()) {
-                // Known recipient — show the remembered name.
+            // Device-contact name is display-only: it never makes a recipient
+            // "known" — the bank name is still captured via the USSD flow.
+            val contactName = ContactsHelper.lookupPhone(this, data.payeeAddress)?.name
+            val shownName = knownRecipientName ?: contactName
+            if (!shownName.isNullOrBlank()) {
                 binding.labelPayTo.visibility = View.VISIBLE
                 binding.tvPayeeName.visibility = View.VISIBLE
                 binding.dividerPayee.visibility = View.VISIBLE
-                binding.tvPayeeName.text = knownRecipientName
+                binding.tvPayeeName.text = shownName
+                if (initialPayeeName.isNullOrBlank()) initialPayeeName = contactName
             } else {
                 // Unknown — name will be captured from the USSD flow.
                 binding.labelPayTo.visibility = View.GONE
@@ -159,7 +167,6 @@ class ConfirmationActivity : AppCompatActivity() {
             })
         }
 
-        binding.btnBack.setOnClickListener { finish() }
         binding.btnPayUssd.setOnClickListener { handlePayment(data) }
     }
 

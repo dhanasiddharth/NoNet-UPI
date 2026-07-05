@@ -1,11 +1,14 @@
 package com.offlineupi.app.ui
 
+import com.offlineupi.app.util.applySystemBarInsets
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +20,7 @@ import com.offlineupi.app.data.SecureBalanceStore
 import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.databinding.ActivityTransactionReceiptBinding
 import com.offlineupi.app.sms.SmsInboxReader
+import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.formatIndianNumber
 import java.io.File
 import java.io.FileOutputStream
@@ -46,6 +50,7 @@ class TransactionReceiptActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityTransactionReceiptBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets(binding.root)
 
         txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
         if (txnId == null) { finish(); return }
@@ -59,35 +64,68 @@ class TransactionReceiptActivity : AppCompatActivity() {
         binding.btnShare.setOnClickListener { shareReceipt() }
     }
 
+    /**
+     * Opens the system contact editor with the UPI ID pre-filled — the picker
+     * lets you attach it to an existing contact or create a new one.
+     */
+    private fun addUpiIdToContact(upiId: String, name: String?) {
+        val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
+            type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
+            name?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
+                ?.let { putExtra(ContactsContract.Intents.Insert.NAME, it) }
+            putExtra(ContactsContract.Intents.Insert.NOTES, "UPI ID: $upiId")
+            // UPI IDs share the email format, so file it there too for visibility
+            putExtra(ContactsContract.Intents.Insert.EMAIL, upiId)
+            putExtra(ContactsContract.Intents.Insert.EMAIL_TYPE,
+                ContactsContract.CommonDataKinds.Email.TYPE_OTHER)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No contacts app available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun displayTransaction() {
         val txn = store.getTransaction(txnId!!)
         if (txn == null) { finish(); return }
 
-        // Status
+        // Avatar initials from payee name; a device-contact photo replaces it
+        binding.tvAvatar.text = initialsFor(txn.payeeName, txn.payeeAddress)
+        val contactName = ContactsHelper.applyPhotoToAvatar(binding.tvAvatar, txn.payeeAddress)
+
+        // "Add UPI ID to contact" — only when the payee is a UPI ID
+        val vpa = txn.payeeAddress?.takeIf { it.contains('@') }
+        binding.btnAddToContact.visibility = if (vpa != null) View.VISIBLE else View.GONE
+        binding.btnAddToContact.setOnClickListener {
+            addUpiIdToContact(vpa ?: return@setOnClickListener, txn.payeeName)
+        }
+
+        // Status \u2014 small badge on the avatar + status word (Google Pay style)
         when (txn.status) {
             "success" -> {
-                binding.tvStatusIcon.text = "\u2713"
-                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
-                binding.tvStatusText.text = "Payment Successful"
+                binding.tvStatusIcon.setImageResource(R.drawable.ic_status_check)
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_status_success)
+                binding.tvStatusText.text = "Completed"
                 binding.tvStatusText.setTextColor(getColor(R.color.accent_green))
             }
             "reversed" -> {
-                binding.tvStatusIcon.text = "\u21a9"
-                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                binding.tvStatusText.text = "Payment Reversed"
+                binding.tvStatusIcon.setImageResource(R.drawable.ic_status_reverse)
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_status_reversed)
+                binding.tvStatusText.text = "Reversed"
                 binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
             }
             "pending" -> {
-                binding.tvStatusIcon.text = "\u2026"
-                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                binding.tvStatusText.text = "Status Pending"
-                binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
+                binding.tvStatusIcon.setImageResource(R.drawable.ic_status_pending)
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_status_pending)
+                binding.tvStatusText.text = "Pending"
+                binding.tvStatusText.setTextColor(getColor(R.color.status_progress))
             }
             else -> {
-                binding.tvStatusIcon.text = "!"
-                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-                binding.tvStatusText.text = "Payment Failed"
-                binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
+                binding.tvStatusIcon.setImageResource(R.drawable.ic_status_fail)
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_status_failed)
+                binding.tvStatusText.text = "Failed"
+                binding.tvStatusText.setTextColor(getColor(R.color.accent_red))
             }
         }
 
@@ -122,10 +160,11 @@ class TransactionReceiptActivity : AppCompatActivity() {
             binding.tvAmount.text = "-"
         }
 
-        // RRN
+        // UPI transaction ID (tap to copy)
         if (!txn.rrn.isNullOrBlank()) {
             binding.tvRrn.text = txn.rrn
             binding.layoutRrn.visibility = View.VISIBLE
+            binding.layoutRrn.setOnClickListener { copyToClipboard("UPI transaction ID", txn.rrn) }
         } else {
             binding.layoutRrn.visibility = View.GONE
         }
@@ -140,13 +179,9 @@ class TransactionReceiptActivity : AppCompatActivity() {
             binding.dividerAccount.visibility = View.GONE
         }
 
-        // Payee — show captured name (if any) above the address
-        if (!txn.payeeName.isNullOrBlank() && txn.payeeName != "Unknown Payee") {
-            binding.tvPayeeName.text = txn.payeeName
-            binding.tvPayeeName.visibility = View.VISIBLE
-        } else {
-            binding.tvPayeeName.visibility = View.GONE
-        }
+        // Hero name — captured name, else the address as the title
+        val heroName = txn.payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
+        binding.tvPayeeName.text = heroName ?: contactName ?: (txn.payeeAddress ?: "Payment")
         binding.tvPayee.text = txn.payeeAddress ?: "-"
 
         // Date & Time
@@ -194,6 +229,29 @@ class TransactionReceiptActivity : AppCompatActivity() {
                 smsPermissionLauncher.launch(Manifest.permission.READ_SMS)
             }
         }
+    }
+
+    /** Two-letter initials from the payee name, else a person glyph. */
+    private fun initialsFor(name: String?, address: String?): String {
+        val clean = name?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
+        if (clean != null) {
+            val parts = clean.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+            val letters = when {
+                parts.size >= 2 -> "${parts[0].first()}${parts[1].first()}"
+                parts.isNotEmpty() -> parts[0].take(2)
+                else -> ""
+            }.uppercase()
+            if (letters.isNotBlank()) return letters
+        }
+        // VPA / phone fallback: first alpha char, else a person glyph
+        val firstAlpha = address?.firstOrNull { it.isLetter() }?.uppercase()
+        return firstAlpha ?: "👤"
+    }
+
+    private fun copyToClipboard(label: String, value: String) {
+        val cb = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cb.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+        Toast.makeText(this, "$label copied", Toast.LENGTH_SHORT).show()
     }
 
     private fun checkStatusFromSms() {

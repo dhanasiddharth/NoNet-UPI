@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UPI Assistant 2.0 — Redesign Proposal</title>
+<style>
+  :root{
+    --bg:#F5F7F5; --surface:#FFFFFF; --ink:#101815; --muted:#5A6963; --line:#E2E8E4;
+    --accent:#0B6B4F; --accent-ink:#095C44; --accent-soft:#E7F3ED;
+    --good:#0B8A5C; --bad:#C1443A;
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0C110F; --surface:#131A16; --ink:#ECF2EF; --muted:#94A49C; --line:#24302A;
+      --accent:#3ADF97; --accent-ink:#7FEBBB; --accent-soft:#10241B;
+      --good:#3ADF97; --bad:#F0705F;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0C110F; --surface:#131A16; --ink:#ECF2EF; --muted:#94A49C; --line:#24302A;
+    --accent:#3ADF97; --accent-ink:#7FEBBB; --accent-soft:#10241B;
+    --good:#3ADF97; --bad:#F0705F;
+  }
+  :root[data-theme="light"]{
+    --bg:#F5F7F5; --surface:#FFFFFF; --ink:#101815; --muted:#5A6963; --line:#E2E8E4;
+    --accent:#0B6B4F; --accent-ink:#095C44; --accent-soft:#E7F3ED;
+    --good:#0B8A5C; --bad:#C1443A;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; margin:0; padding:0 24px 96px;
+    -webkit-font-smoothing:antialiased;
+  }
+  main{max-width:1100px; margin:0 auto}
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase; font-weight:700;
+    color:var(--accent); margin:56px 0 10px;
+  }
+  h1{
+    font-size:clamp(30px,4.6vw,46px); line-height:1.08; letter-spacing:-.02em;
+    font-weight:800; margin:0 0 18px; max-width:18ch; text-wrap:balance;
+  }
+  h2{font-size:24px; letter-spacing:-.01em; font-weight:750; margin:0 0 6px; text-wrap:balance}
+  h3{font-size:16px; font-weight:700; margin:0 0 4px}
+  p{max-width:66ch}
+  .lede{font-size:17px; color:var(--muted); max-width:60ch}
+  section{margin-top:72px}
+  .section-head{margin-bottom:28px}
+  .section-head p{color:var(--muted); margin:6px 0 0}
+  .kicker{font-size:12px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:var(--accent); margin-bottom:6px}
+
+  /* reference cards */
+  .refs{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px}
+  .ref{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 16px 14px}
+  .ref b{display:block; font-size:14px; margin-bottom:4px}
+  .ref span{font-size:13px; color:var(--muted); display:block}
+  .ref .take{margin-top:10px; font-size:12.5px; color:var(--ink); border-top:1px dashed var(--line); padding-top:8px}
+  .ref .take em{font-style:normal; color:var(--accent-ink); font-weight:650}
+
+  /* IA map */
+  .ia{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px}
+  .ia-col{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px}
+  .ia-col.now{border-color:var(--accent)}
+  .ia-tag{font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; border-radius:999px; padding:3px 9px; display:inline-block; margin-bottom:8px}
+  .ia-tag.live{background:var(--accent-soft); color:var(--accent-ink)}
+  .ia-tag.ph2{background:transparent; border:1px solid var(--line); color:var(--muted)}
+  .ia-col h3{font-size:15px}
+  .ia-col ul{margin:8px 0 0; padding-left:16px; font-size:13px; color:var(--muted)}
+  .ia-col li{margin:3px 0}
+  .ia-col li b{color:var(--ink); font-weight:600}
+
+  /* screen rows */
+  .screen{display:grid; grid-template-columns:minmax(280px,340px) 1fr; gap:40px; align-items:start; margin-top:44px}
+  .screen.flip{grid-template-columns:1fr minmax(280px,340px)}
+  .screen.flip .phone-wrap{order:2}
+  @media (max-width:760px){ .screen,.screen.flip{grid-template-columns:1fr} .screen.flip .phone-wrap{order:0} }
+  .duo{display:flex; flex-wrap:wrap; gap:28px; justify-content:center; margin-top:8px}
+  .duo-notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:0 40px; margin-top:28px}
+  .notes h3{font-size:20px; letter-spacing:-.01em}
+  .notes .sub{color:var(--muted); font-size:14px; margin:2px 0 16px}
+  .note{display:grid; grid-template-columns:26px 1fr; gap:10px; padding:10px 0; border-top:1px solid var(--line); font-size:14px}
+  .note:last-child{border-bottom:1px solid var(--line)}
+  .note .dot{
+    width:22px; height:22px; border-radius:999px; background:var(--accent-soft); color:var(--accent-ink);
+    font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px;
+  }
+  .note b{font-weight:650}
+  .note span{color:var(--muted)}
+
+  /* ============ PHONE MOCKUPS ============ */
+  .phone-wrap{display:flex; flex-direction:column; gap:10px; align-items:center}
+  .phone-cap{font-size:12px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; font-weight:700}
+
+  /* dark app theme (default) */
+  .ph{
+    --g:#0A0F0D; --s1:#121A16; --s2:#192420; --hair:#22302A;
+    --tx:#EDF3F0; --tx2:#8CA096;
+    --brand:#34D88F; --onbrand:#04150C;
+    --grn:#34D88F; --red:#F26A5B; --amb:#F0A44B; --prog:#7C8D85;
+    --av1b:#1D3A4E; --av1t:#93C7E8; --av2b:#1E4032; --av2t:#8FE0B4;
+    --av3b:#43305A; --av3t:#CDB0EC; --av4b:#4E3A20; --av4t:#E8C48F;
+    --dim:rgba(4,8,6,.58);
+    width:100%; max-width:330px; background:var(--g); color:var(--tx);
+    border-radius:36px; border:6px solid #060A08; box-shadow:0 24px 60px rgba(8,20,14,.30);
+    overflow:hidden; font-size:13px; position:relative;
+    font-variant-numeric:tabular-nums;
+  }
+  /* light app theme */
+  .ph.lite{
+    --g:#F2F5F2; --s1:#FFFFFF; --s2:#FFFFFF; --hair:#E2E9E4;
+    --tx:#141D18; --tx2:#66766E;
+    --brand:#0B6B4F; --onbrand:#FFFFFF;
+    --grn:#0B8A5C; --red:#C1443A; --amb:#AE6A12; --prog:#75837C;
+    --av1b:#DEEDF7; --av1t:#2E5F80; --av2b:#DFF2E7; --av2t:#19684A;
+    --av3b:#ECE3F7; --av3t:#5F4487; --av4b:#F6EBD9; --av4t:#7C5B22;
+    --dim:rgba(16,24,20,.42);
+    border-color:#0E1512; box-shadow:0 24px 60px rgba(20,29,24,.16);
+  }
+  .ph *{box-sizing:border-box}
+  .ph .sb{display:flex; justify-content:space-between; padding:12px 20px 4px; font-size:11px; color:var(--tx2); font-weight:600}
+  .ph .body{padding:8px 14px 0}
+  .ph .gest{width:110px; height:4px; border-radius:4px; background:var(--hair); margin:10px auto 10px}
+
+  .ph .hero-label{font-size:11px; color:var(--tx2); letter-spacing:.1em; text-transform:uppercase; font-weight:700}
+  .ph .row{display:flex; align-items:center; gap:10px; padding:9px 6px; border-radius:12px}
+  .ph .row + .row{border-top:1px solid var(--hair)}
+  .ph .av{width:34px; height:34px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex:none}
+  .ph .av.a1{background:var(--av1b); color:var(--av1t)}
+  .ph .av.a2{background:var(--av2b); color:var(--av2t)}
+  .ph .av.a3{background:var(--av3b); color:var(--av3t)}
+  .ph .av.a4{background:var(--av4b); color:var(--av4t)}
+  .ph .who{flex:1; min-width:0}
+  .ph .who b{display:block; font-size:13px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ph .who span{font-size:11px; color:var(--tx2)}
+  .ph .amt{text-align:right; font-weight:700; font-size:13.5px}
+  .ph .amt small{display:block; font-weight:500; font-size:10.5px; color:var(--tx2)}
+  .ph .amt.neg{color:var(--tx)}
+  .ph .amt.pos{color:var(--grn)}
+  .ph .amt.down{color:var(--red)}
+
+  .ph .chip{display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:800; letter-spacing:.04em; border-radius:999px; padding:2px 7px; text-transform:uppercase}
+  .ph .chip.ok{background:color-mix(in srgb, var(--grn) 15%, transparent); color:var(--grn)}
+  .ph .chip.run{background:color-mix(in srgb, var(--prog) 18%, transparent); color:var(--prog)}
+  .ph .chip.rev{background:color-mix(in srgb, var(--amb) 16%, transparent); color:var(--amb)}
+  .ph .chip.bad{background:color-mix(in srgb, var(--red) 14%, transparent); color:var(--red)}
+  .ph .chip .pulse{width:5px;height:5px;border-radius:99px;background:var(--prog)}
+
+  .ph .day{font-size:10.5px; color:var(--tx2); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin:12px 6px 2px}
+
+  .ph .dock{
+    background:var(--s1);
+    border-top:1px solid var(--hair); border-radius:24px 24px 0 0; margin-top:10px;
+    padding:8px 14px 0;
+  }
+  .ph .drag{width:36px; height:4px; border-radius:99px; background:var(--hair); margin:2px auto 10px}
+  .ph .recents{display:flex; gap:12px; overflow:hidden; padding:2px 2px 10px}
+  .ph .rec{display:flex; flex-direction:column; align-items:center; gap:4px; font-size:9.5px; color:var(--tx2); flex:none; width:48px}
+  .ph .rec .av{width:44px; height:44px; font-size:13px}
+  .ph .rec.add .av{background:transparent; border:1.5px dashed var(--prog); color:var(--tx2); font-size:18px; font-weight:400}
+  .ph .payline{display:flex; gap:8px; padding-bottom:12px}
+  .ph .scan{
+    flex:1.2; background:var(--brand); color:var(--onbrand); border-radius:14px; padding:12px 10px;
+    font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .ph .toid{
+    flex:1; background:var(--s2); border:1px solid var(--hair); color:var(--tx2); border-radius:14px;
+    padding:12px 10px; font-size:12px; display:flex; align-items:center; gap:6px;
+  }
+  .ph .nav{display:flex; border-top:1px solid var(--hair); background:var(--s1); padding:8px 6px 2px}
+  .ph .nav div{flex:1; text-align:center; font-size:9.5px; color:var(--tx2); font-weight:700; letter-spacing:.03em}
+  .ph .nav div i{display:block; font-style:normal; font-size:15px; margin-bottom:2px}
+  .ph .nav .on{color:var(--brand)}
+
+  .ph .balpill{display:inline-flex; align-items:center; gap:6px; background:var(--s2); border:1px solid var(--hair); border-radius:999px; padding:4px 10px; font-size:11px; color:var(--tx2)}
+  .ph .topbar{display:flex; align-items:center; justify-content:space-between; padding:6px 6px 10px}
+  .ph .topbar b{font-size:16px; letter-spacing:-.01em}
+
+  /* composer sheet */
+  .ph .dim{background:var(--dim); padding:36px 10px 0}
+  .ph .sheet{background:var(--s1); border:1px solid var(--hair); border-bottom:none; border-radius:26px 26px 0 0; padding:10px 16px 0}
+  .ph .payee-line{display:flex; align-items:center; gap:10px; padding:4px 2px 12px}
+  .ph .bigamt{text-align:center; padding:12px 0 4px; font-size:44px; font-weight:800; letter-spacing:-.02em}
+  .ph .bigamt small{font-size:20px; font-weight:600; color:var(--tx2); margin-right:4px}
+  .ph .amt-sub{text-align:center; font-size:11px; color:var(--tx2); padding-bottom:12px}
+  .ph .kbd{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; padding-bottom:10px}
+  .ph .kbd div{background:var(--s2); border:1px solid var(--hair); border-radius:12px; text-align:center; padding:13px 0; font-size:16px; font-weight:650}
+  .ph.lite .kbd div{box-shadow:0 1px 2px rgba(20,29,24,.05)}
+  .ph .paybtn{background:var(--brand); color:var(--onbrand); border-radius:16px; text-align:center; padding:15px 0; font-weight:800; font-size:14px; margin-bottom:12px}
+
+  /* processing timeline */
+  .ph .tl{padding:6px 4px}
+  .ph .tstep{display:grid; grid-template-columns:24px 1fr; gap:10px; padding:7px 0}
+  .ph .tdot{width:20px;height:20px;border-radius:99px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900}
+  .ph .tdot.done{background:color-mix(in srgb, var(--grn) 16%, transparent); color:var(--grn)}
+  .ph .tdot.act{background:color-mix(in srgb, var(--brand) 18%, transparent); color:var(--brand)}
+  .ph .tdot.wait{background:var(--s2); color:var(--tx2)}
+  .ph .tstep b{font-size:12.5px; font-weight:650; display:block}
+  .ph .tstep span{font-size:11px; color:var(--tx2)}
+  .ph .vcard{background:var(--s2); border:1px solid var(--hair); border-radius:16px; padding:12px; margin:8px 0 12px; font-size:12px}
+  .ph .vcard b{color:var(--brand)}
+
+  /* portfolio */
+  .ph .pf-hero{padding:4px 6px 2px}
+  .ph .pf-hero .v{font-size:32px; font-weight:800; letter-spacing:-.02em}
+  .ph .delta{display:inline-flex; gap:6px; align-items:center; font-size:12px; font-weight:700; color:var(--grn)}
+  .ph .delta small{color:var(--tx2); font-weight:500}
+  .ph .ranges{display:flex; gap:4px; padding:10px 4px}
+  .ph .ranges div{flex:1; text-align:center; font-size:10.5px; font-weight:700; color:var(--tx2); padding:5px 0; border-radius:8px}
+  .ph .ranges .on{background:var(--s2); border:1px solid var(--hair); color:var(--brand)}
+  .ph .spark{flex:none}
+
+  /* money tab */
+  .ph .mflow{display:flex; gap:8px; padding:8px 4px 4px}
+  .ph .mcard{flex:1; background:var(--s2); border:1px solid var(--hair); border-radius:14px; padding:10px}
+  .ph .mcard b{font-size:15px; display:block; margin-top:2px}
+  .ph .mcard span{font-size:10px; color:var(--tx2); text-transform:uppercase; letter-spacing:.08em; font-weight:700}
+  .ph .review{display:flex; align-items:center; justify-content:space-between; background:color-mix(in srgb, var(--brand) 9%, transparent); border:1px solid color-mix(in srgb, var(--brand) 35%, transparent); border-radius:14px; padding:10px 12px; margin:10px 4px; font-size:12px}
+  .ph .review b{color:var(--brand)}
+  .ph .cat{width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; flex:none; background:var(--s2); border:1px solid var(--hair)}
+  .ph .link{font-size:10px; color:var(--brand); font-weight:700}
+
+  /* status language strip */
+  .status-strip{display:flex; flex-wrap:wrap; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+  .st{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:10px 14px; min-width:200px; flex:1}
+  .st .sw{width:10px; height:10px; border-radius:99px; flex:none}
+  .st b{font-size:13.5px; display:block}
+  .st span{font-size:12px; color:var(--muted); display:block}
+
+  /* tokens */
+  .tokens{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px}
+  .tok{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px}
+  .swrow{display:flex; align-items:center; gap:10px; padding:5px 0; font-size:13px}
+  .swrow code{font-size:12px; color:var(--muted); margin-left:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .swatch{width:22px; height:22px; border-radius:7px; border:1px solid rgba(0,0,0,.18); flex:none}
+  .pair{display:flex; gap:0; width:44px; flex:none}
+  .pair .swatch:first-child{border-radius:7px 0 0 7px}
+  .pair .swatch:last-child{border-radius:0 7px 7px 0; margin-left:-1px}
+
+  /* roadmap */
+  .phases{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px}
+  .phase{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+  .phase.p1{border-color:var(--accent)}
+  .phase .pn{font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--accent-ink)}
+  .phase h3{margin-top:4px}
+  .phase ul{padding-left:17px; margin:10px 0 0; font-size:13.5px; color:var(--muted)}
+  .phase li{margin:5px 0}
+  .phase li b{color:var(--ink); font-weight:600}
+
+  .foot{margin-top:80px; border-top:1px solid var(--line); padding-top:16px; font-size:12.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Design proposal · UPI Assistant 2.0 · rev B</div>
+  <h1>The ledger on top.<br>The pay dock under your thumb.</h1>
+  <p class="lede">
+    A ground-up visual redesign that keeps everything the app already does — one-dial USSD payments,
+    *99# verification, recipient memory — and grows it into three surfaces: <b>Pay</b>, <b>Portfolio</b>,
+    and <b>Money</b>. Color direction: <b>emerald on porcelain</b> — the money-green lineage of Wise,
+    Cash&nbsp;App, and Fi — in matched light and dark modes.
+  </p>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Grounding</div>
+      <h2>Borrowed from accoladed flows, adapted for USSD</h2>
+      <p>Five patterns from award-recognized finance apps, each translated to this app's offline-first reality.</p>
+    </div>
+    <div class="refs">
+      <div class="ref"><b>Apple Card / Wallet</b><span>Ledger-first home; transactions as the hero surface, grouped by day.</span>
+        <div class="take"><em>We take:</em> feed on top, calm rows, big tabular numerals.</div></div>
+      <div class="ref"><b>Google Pay (Tez)</b><span>People-first recents row; repeat payments are one tap.</span>
+        <div class="take"><em>We take:</em> recents avatars in the dock — known payees fire the one-shot dial.</div></div>
+      <div class="ref"><b>Cash App</b><span>Amount entry as the entire screen; oversized keypad, money-green identity.</span>
+        <div class="take"><em>We take:</em> the composer sheet — and the confidence to let green be the brand.</div></div>
+      <div class="ref"><b>Robinhood <span style="font-size:11px">(ADA winner)</span></b><span>Scrubbable performance line, range pills, color tied to direction.</span>
+        <div class="take"><em>We take:</em> the portfolio chart grammar — 1D→1Y pills, endpoint dot, P&amp;L color.</div></div>
+      <div class="ref"><b>Copilot Money <span style="font-size:11px">(ADA finalist)</span></b><span>Effortless categorization; a review inbox instead of forms.</span>
+        <div class="take"><em>We take:</em> category chips, the "to review" queue, bill attachments.</div></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Architecture</div>
+      <h2>Four tabs, one dock</h2>
+      <p>Everything that exists today lands intact in the <b>Pay</b> tab. Portfolio and Money ship as designed shells with placeholders until their backends arrive.</p>
+    </div>
+    <div class="ia">
+      <div class="ia-col now">
+        <span class="ia-tag live">Ships now — current features</span>
+        <h3>① Pay</h3>
+        <ul>
+          <li><b>Ledger feed</b> — UPI history, day-grouped, status chips</li>
+          <li><b>Pay dock</b> — recents, Scan QR, number/UPI ID</li>
+          <li><b>Composer sheet</b> — amount keypad, remarks, PIN memory</li>
+          <li><b>Live processing</b> — one-dial USSD + *99*6*1# verification</li>
+          <li><b>Receipt</b> — RRN, reversal pair, share card</li>
+        </ul>
+      </div>
+      <div class="ia-col">
+        <span class="ia-tag ph2">Phase 2 — placeholder shell</span>
+        <h3>② Portfolio</h3>
+        <ul>
+          <li><b>Net value hero</b> + day / total P&amp;L</li>
+          <li><b>Scrub chart</b> — 1D · 1W · 1M · 3M · 1Y · All</li>
+          <li><b>Holdings</b> with sparklines (Yahoo Finance import via backend)</li>
+          <li><b>Holding detail</b> — full chart, lots, movements</li>
+        </ul>
+      </div>
+      <div class="ia-col">
+        <span class="ia-tag ph2">Phase 3 — placeholder shell</span>
+        <h3>③ Money</h3>
+        <ul>
+          <li><b>Statement feed</b> — bank transactions served by backend</li>
+          <li><b>Auto-reconcile</b> — statement rows matched to UPI records by RRN</li>
+          <li><b>Categorize</b> — expense types, review inbox</li>
+          <li><b>Attach</b> — invoices / bills per transaction</li>
+        </ul>
+      </div>
+      <div class="ia-col">
+        <span class="ia-tag live">Ships now</span>
+        <h3>④ More</h3>
+        <ul>
+          <li><b>Accounts &amp; balance check</b> (existing *99*3# flow)</li>
+          <li><b>UPI PIN memory</b> controls</li>
+          <li><b>Recipients</b> — saved names, edit / forget</li>
+          <li>Settings · About</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Screen 1 · Pay (home)</div>
+      <h2>Ledger above, dock below — in both modes</h2>
+      <p>The same home rendered in light and dark. Both are first-class: light is porcelain with deep
+      emerald actions; dark is green-black with luminous mint. State chips keep identical meaning across modes.</p>
+    </div>
+
+    <div class="duo">
+      <!-- LIGHT home -->
+      <div class="phone-wrap">
+        <div class="ph lite">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="body">
+            <div class="topbar">
+              <b>Payments</b>
+              <span class="balpill">SIB ··1256 · ₹ 12,193 <span style="opacity:.6">👁</span></span>
+            </div>
+
+            <div class="day">Today</div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 6:32 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹7</div><span class="chip bad">✕ failed</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 6:28 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹6</div><span class="chip rev">↩ reversed</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 5:39 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹4</div><span class="chip ok">✓ verified</span>
+              </div>
+            </div>
+
+            <div class="day">1 July</div>
+            <div class="row">
+              <div class="av a1">SK</div>
+              <div class="who"><b>Suganya K</b><span>suganyak395@okhdfcbank</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹100</div><span class="chip run"><span class="pulse"></span> checking</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dock">
+            <div class="drag"></div>
+            <div class="recents">
+              <div class="rec"><div class="av a2">VP</div>Vinothini</div>
+              <div class="rec"><div class="av a1">SK</div>Suganya</div>
+              <div class="rec"><div class="av a3">RM</div>Ramesh</div>
+              <div class="rec"><div class="av a4">AK</div>Arun</div>
+              <div class="rec add"><div class="av">+</div>New</div>
+            </div>
+            <div class="payline">
+              <div class="scan">▣ Scan QR</div>
+              <div class="toid">Number / UPI ID…</div>
+            </div>
+            <div class="nav">
+              <div class="on"><i>₹</i>Pay</div>
+              <div><i>◠</i>Portfolio</div>
+              <div><i>☰</i>Money</div>
+              <div><i>◦◦</i>More</div>
+            </div>
+            <div class="gest"></div>
+          </div>
+        </div>
+        <div class="phone-cap">Pay · light</div>
+      </div>
+
+      <!-- DARK home -->
+      <div class="phone-wrap">
+        <div class="ph">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="body">
+            <div class="topbar">
+              <b>Payments</b>
+              <span class="balpill">SIB ··1256 · ₹ 12,193 <span style="opacity:.6">👁</span></span>
+            </div>
+
+            <div class="day">Today</div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 6:32 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹7</div><span class="chip bad">✕ failed</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 6:28 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹6</div><span class="chip rev">↩ reversed</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="av a2">VP</div>
+              <div class="who"><b>Vinothini P</b><span>86670 83512 · 5:39 am</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹4</div><span class="chip ok">✓ verified</span>
+              </div>
+            </div>
+
+            <div class="day">1 July</div>
+            <div class="row">
+              <div class="av a1">SK</div>
+              <div class="who"><b>Suganya K</b><span>suganyak395@okhdfcbank</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <div class="amt neg">− ₹100</div><span class="chip run"><span class="pulse"></span> checking</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dock">
+            <div class="drag"></div>
+            <div class="recents">
+              <div class="rec"><div class="av a2">VP</div>Vinothini</div>
+              <div class="rec"><div class="av a1">SK</div>Suganya</div>
+              <div class="rec"><div class="av a3">RM</div>Ramesh</div>
+              <div class="rec"><div class="av a4">AK</div>Arun</div>
+              <div class="rec add"><div class="av">+</div>New</div>
+            </div>
+            <div class="payline">
+              <div class="scan">▣ Scan QR</div>
+              <div class="toid">Number / UPI ID…</div>
+            </div>
+            <div class="nav">
+              <div class="on"><i>₹</i>Pay</div>
+              <div><i>◠</i>Portfolio</div>
+              <div><i>☰</i>Money</div>
+              <div><i>◦◦</i>More</div>
+            </div>
+            <div class="gest"></div>
+          </div>
+        </div>
+        <div class="phone-cap">Pay · dark</div>
+      </div>
+    </div>
+
+    <div class="duo-notes">
+      <div class="notes">
+        <div class="note"><div class="dot">1</div><div><b>Feed is the app.</b> <span>Newest first, day-grouped. Every row carries the verification verdict as a chip — the trust story this app uniquely earns via *99*6*1# is worn on the surface, not buried in receipts.</span></div></div>
+        <div class="note"><div class="dot">2</div><div><b>Balance is ambient, hidden by default.</b> <span>A masked pill in the top bar (existing balance-check flow feeds it). Tap the eye to reveal; long-press to refresh via *99*3#.</span></div></div>
+        <div class="note"><div class="dot">3</div><div><b>Recents row = the speed feature.</b> <span>Saved recipients with captured names. One tap opens the composer pre-filled — and because they're "known," payment fires the one-shot dial (~8s to PIN).</span></div></div>
+      </div>
+      <div class="notes">
+        <div class="note"><div class="dot">4</div><div><b>Two entries, one hierarchy.</b> <span>Scan QR is the emerald primary (merchant world); Number/UPI ID is the quiet secondary (people world). Both sit in the natural thumb arc — no reaching for a top corner, ever.</span></div></div>
+        <div class="note"><div class="dot">5</div><div><b>The dock is a living sheet.</b> <span>Pull the handle → composer. During payment the same sheet becomes the live status surface, so "where do I look" never changes.</span></div></div>
+        <div class="note"><div class="dot">6</div><div><b>Modes are siblings, not inverts.</b> <span>Light: deep emerald #0B6B4F on porcelain. Dark: luminous mint #34D88F on green-black. Chips, avatars and semantic colors are re-tuned per mode for contrast, not flipped.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Screen 2 · Composer</div>
+      <h2>Amount entry that lives in the thumb zone</h2>
+    </div>
+
+    <div class="screen flip">
+      <div class="notes">
+        <h3>One sheet, everything reachable</h3>
+        <div class="sub">Cash-App-scale numerals; the keypad and Pay never leave the bottom 60% of the screen. Shown in light mode.</div>
+        <div class="note"><div class="dot">1</div><div><b>Known payee = trust header.</b> <span>Captured name + number + "Known · pays in one dial" badge. Unknown payees show "Name will be verified by your bank during payment" instead — honest about the capture step.</span></div></div>
+        <div class="note"><div class="dot">2</div><div><b>Whole-rupee nudge.</b> <span>A subtle hint under the amount ("whole rupees pay fastest") because decimals force the slower interactive dial — the UI teaches the system's physics.</span></div></div>
+        <div class="note"><div class="dot">3</div><div><b>Remarks as a chip, not a form field.</b> <span>Optional, collapsed by default; digits-only remarks keep the one-shot path.</span></div></div>
+        <div class="note"><div class="dot">4</div><div><b>Pay is one thumb press.</b> <span>PIN is remembered for the session (personal device), so tapping Pay is genuinely the last touch until the USSD PIN prompt auto-fills.</span></div></div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="ph lite">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="dim">
+            <div class="sheet">
+              <div class="drag"></div>
+              <div class="payee-line">
+                <div class="av a2" style="width:40px;height:40px">VP</div>
+                <div class="who">
+                  <b style="font-size:15px">Vinothini P</b>
+                  <span>86670 83512 · <span style="color:var(--grn)">Known · pays in one dial</span></span>
+                </div>
+              </div>
+              <div class="bigamt"><small>₹</small>500</div>
+              <div class="amt-sub">whole rupees pay fastest · <span style="color:var(--brand);font-weight:700">+ remark</span></div>
+              <div class="kbd">
+                <div>1</div><div>2</div><div>3</div>
+                <div>4</div><div>5</div><div>6</div>
+                <div>7</div><div>8</div><div>9</div>
+                <div>·</div><div>0</div><div>⌫</div>
+              </div>
+              <div class="paybtn">Pay ₹500 via *99#</div>
+              <div class="gest"></div>
+            </div>
+          </div>
+        </div>
+        <div class="phone-cap">Composer sheet · light</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Screen 3 · Live payment</div>
+      <h2>Verification is the star of the show</h2>
+    </div>
+
+    <div class="screen">
+      <div class="phone-wrap">
+        <div class="ph">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="body">
+            <div class="topbar" style="padding-top:14px">
+              <div>
+                <div class="hero-label">Paying</div>
+                <b style="font-size:20px">Vinothini P</b>
+              </div>
+              <div style="text-align:right">
+                <div class="hero-label">Amount</div>
+                <b style="font-size:20px">₹500</b>
+              </div>
+            </div>
+
+            <div class="tl">
+              <div class="tstep"><div class="tdot done">✓</div><div><b>Sent in one dial</b><span>*99# with payee &amp; amount embedded</span></div></div>
+              <div class="tstep"><div class="tdot done">✓</div><div><b>UPI PIN entered</b><span>auto-filled · never stored on disk</span></div></div>
+              <div class="tstep"><div class="tdot done">✓</div><div><b>Bank responded</b><span>result held as provisional</span></div></div>
+              <div class="tstep"><div class="tdot act">◔</div><div><b>Verifying via *99# history</b><span>check 1 of 3 · retries in 15s if not listed</span></div></div>
+              <div class="tstep"><div class="tdot wait">✓</div><div><b style="color:var(--tx2)">Verified</b><span>status confirmed from the network's own ledger</span></div></div>
+            </div>
+
+            <div class="vcard">
+              The screen never says <b>paid</b> until the *99*6*1# transaction list —
+              or your bank's SMS — proves it. No guesses, no false receipts.
+            </div>
+
+            <div class="paybtn" style="background:transparent;border:1px solid var(--hair);color:var(--tx2)">Done — verify in background</div>
+          </div>
+          <div class="gest"></div>
+        </div>
+        <div class="phone-cap">Processing · dark</div>
+      </div>
+
+      <div class="notes">
+        <h3>The current flow, given ceremony</h3>
+        <div class="sub">This is the screen we already engineered — redesigned so the guarantees read at a glance.</div>
+        <div class="note"><div class="dot">1</div><div><b>Recipient name is the title</b> <span>(already shipped). Amount sits opposite — the two facts you'd check mid-payment.</span></div></div>
+        <div class="note"><div class="dot">2</div><div><b>Five honest steps, not USSD menus.</b> <span>The timeline names outcomes ("Bank responded — held as provisional"), not carrier dialogs. The active step pulses mint; done steps settle green.</span></div></div>
+        <div class="note"><div class="dot">3</div><div><b>The verification card is the brand moment.</b> <span>Every accoladed finance app sells trust; ours is literal — the network's own history is quoted before "success" is ever rendered.</span></div></div>
+        <div class="note"><div class="dot">4</div><div><b>Escape hatch.</b> <span>"Done — verify in background": the check continues, the ledger row shows the pulsing "checking" chip, and the row flips to ✓ verified when confirmed.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Screen 4 · Portfolio (Phase 2)</div>
+      <h2>Your Yahoo Finance portfolio, native</h2>
+    </div>
+
+    <div class="screen flip">
+      <div class="notes">
+        <h3>Robinhood grammar, Indian market content</h3>
+        <div class="sub">Backend imports the Yahoo portfolio; the app renders value, movement, and holdings. Shown in dark mode.</div>
+        <div class="note"><div class="dot">1</div><div><b>Hero = net value + day delta.</b> <span>One number, tabular numerals, delta chip in P&amp;L color. Total return sits beneath in muted ink.</span></div></div>
+        <div class="note"><div class="dot">2</div><div><b>Scrubbable line, range pills.</b> <span>1D · 1W · 1M · 3M · 1Y · All. Touch-drag shows value + date at the finger; the endpoint dot and delta re-color with direction. Chart is single-series — no legend, no grid noise.</span></div></div>
+        <div class="note"><div class="dot">3</div><div><b>Holdings rows carry three facts:</b> <span>position (qty × LTP), a 30-day sparkline, and day/total P&amp;L. Tap → holding detail with the same chart grammar per symbol.</span></div></div>
+        <div class="note"><div class="dot">4</div><div><b>Offline honesty.</b> <span>Quotes carry a "as of 15:30 IST" stamp; stale data grays the delta rather than lying with old color.</span></div></div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="ph">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="body">
+            <div class="pf-hero">
+              <div class="hero-label">Portfolio value</div>
+              <div class="v">₹ 12,48,730</div>
+              <div class="delta">▲ ₹15,290 · 1.24% <small>today</small></div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:2px">Total return +₹2,10,455 (+20.3%) · as of 15:30 IST</div>
+            </div>
+
+            <svg viewBox="0 0 300 96" style="width:100%;display:block;margin:6px 0 0" aria-label="Portfolio value, 1 month, trending up">
+              <defs>
+                <linearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#34D88F" stop-opacity=".22"/>
+                  <stop offset="1" stop-color="#34D88F" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,70 C20,66 32,74 48,68 C64,62 74,50 92,54 C110,58 118,44 136,40 C154,36 166,48 184,42 C202,36 214,22 232,26 C250,30 262,18 282,14 L300,12 L300,96 L0,96 Z" fill="url(#pf)"/>
+              <path d="M0,70 C20,66 32,74 48,68 C64,62 74,50 92,54 C110,58 118,44 136,40 C154,36 166,48 184,42 C202,36 214,22 232,26 C250,30 262,18 282,14 L300,12" fill="none" stroke="#34D88F" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="300" cy="12" r="3.5" fill="#34D88F"/>
+            </svg>
+            <div class="ranges">
+              <div>1D</div><div>1W</div><div class="on">1M</div><div>3M</div><div>1Y</div><div>All</div>
+            </div>
+
+            <div class="day">Holdings · 6</div>
+            <div class="row">
+              <div class="av a1" style="border-radius:10px">T</div>
+              <div class="who"><b>TCS</b><span>12 × ₹4,182</span></div>
+              <svg class="spark" width="52" height="20" viewBox="0 0 52 20"><path d="M0,14 L9,12 L17,15 L26,9 L34,10 L43,5 L52,6" fill="none" stroke="#34D88F" stroke-width="1.5"/></svg>
+              <div class="amt pos">+1.8%<small>₹50,184</small></div>
+            </div>
+            <div class="row">
+              <div class="av a4" style="border-radius:10px">H</div>
+              <div class="who"><b>HDFCBANK</b><span>40 × ₹1,712</span></div>
+              <svg class="spark" width="52" height="20" viewBox="0 0 52 20"><path d="M0,8 L9,10 L17,7 L26,12 L34,11 L43,14 L52,12" fill="none" stroke="#F26A5B" stroke-width="1.5"/></svg>
+              <div class="amt down">−0.6%<small>₹68,480</small></div>
+            </div>
+            <div class="row">
+              <div class="av a3" style="border-radius:10px">I</div>
+              <div class="who"><b>INFY</b><span>55 × ₹1,624</span></div>
+              <svg class="spark" width="52" height="20" viewBox="0 0 52 20"><path d="M0,15 L9,13 L17,14 L26,10 L34,8 L43,9 L52,4" fill="none" stroke="#34D88F" stroke-width="1.5"/></svg>
+              <div class="amt pos">+2.4%<small>₹89,320</small></div>
+            </div>
+
+            <div class="nav" style="margin-top:8px">
+              <div><i>₹</i>Pay</div>
+              <div class="on"><i>◠</i>Portfolio</div>
+              <div><i>☰</i>Money</div>
+              <div><i>◦◦</i>More</div>
+            </div>
+          </div>
+          <div class="gest"></div>
+        </div>
+        <div class="phone-cap">Portfolio · dark · 1M view</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Screen 5 · Money (Phase 3)</div>
+      <h2>Statements in, categories on, bills attached</h2>
+    </div>
+
+    <div class="screen">
+      <div class="phone-wrap">
+        <div class="ph lite">
+          <div class="sb"><span>9:41</span><span>▲ USSD · 4G ▮</span></div>
+          <div class="body">
+            <div class="topbar"><b>Money</b><span class="balpill">July 2026 ▾</span></div>
+
+            <div class="mflow">
+              <div class="mcard"><span>In</span><b style="color:var(--grn)">₹ 1,84,000</b></div>
+              <div class="mcard"><span>Out</span><b>₹ 92,410</b></div>
+              <div class="mcard"><span>Reconciled</span><b>96%</b></div>
+            </div>
+
+            <div class="review"><span><b>12 transactions</b> need a category</span><span class="link">Review →</span></div>
+
+            <div class="day">Statement · SIB ··1256</div>
+            <div class="row">
+              <div class="cat">🛒</div>
+              <div class="who"><b>Ratnadeep Super Market</b><span>Groceries · UPI · <span style="color:var(--grn)">⛓ matched RRN ··1607</span></span></div>
+              <div class="amt neg">− ₹2,340</div>
+            </div>
+            <div class="row">
+              <div class="cat">⛽</div>
+              <div class="who"><b>IOCL Edayankinar</b><span>Fuel · UPI · ⛓ matched · <span class="link">📎 bill</span></span></div>
+              <div class="amt neg">− ₹1,500</div>
+            </div>
+            <div class="row">
+              <div class="cat">🏠</div>
+              <div class="who"><b>Rent — July</b><span>Housing · NEFT</span></div>
+              <div class="amt neg">− ₹18,000</div>
+            </div>
+            <div class="row">
+              <div class="cat">❓</div>
+              <div class="who"><b>ATM WDL 6201</b><span style="color:var(--brand);font-weight:600">Tap to categorize</span></div>
+              <div class="amt neg">− ₹5,000</div>
+            </div>
+            <div class="row">
+              <div class="cat">💼</div>
+              <div class="who"><b>Salary — Acme Pvt Ltd</b><span>Income · NEFT</span></div>
+              <div class="amt pos">+ ₹1,84,000</div>
+            </div>
+
+            <div class="nav" style="margin-top:8px">
+              <div><i>₹</i>Pay</div>
+              <div><i>◠</i>Portfolio</div>
+              <div class="on"><i>☰</i>Money</div>
+              <div><i>◦◦</i>More</div>
+            </div>
+          </div>
+          <div class="gest"></div>
+        </div>
+        <div class="phone-cap">Money · light · statement feed</div>
+      </div>
+
+      <div class="notes">
+        <h3>The accounting surface</h3>
+        <div class="sub">Bank-statement history from the backend, merged with — and checked against — the app's own UPI ledger.</div>
+        <div class="note"><div class="dot">1</div><div><b>Three-number header.</b> <span>In, Out, and Reconciled% for the month. Reconciled is this app's signature stat: statement rows auto-matched to in-app UPI records by RRN — the same matcher already built for SMS.</span></div></div>
+        <div class="note"><div class="dot">2</div><div><b>Review inbox, not forms.</b> <span>Copilot's best trick: uncategorized items queue in one place; each takes two taps (category chip → done). Rules learn: "IOCL → Fuel" applies forward automatically.</span></div></div>
+        <div class="note"><div class="dot">3</div><div><b>Every row can carry paper.</b> <span>📎 attaches an invoice/bill (camera or PDF) stored against the transaction; the receipt page shows it beside the RRN.</span></div></div>
+        <div class="note"><div class="dot">4</div><div><b>Backend contract (thin).</b> <span>GET /statements?acct&amp;month → normalized rows (date, narration, amount, ref). Parsing PDFs/CSVs happens server-side; the app stays offline-tolerant with cached months.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">System</div>
+      <h2>One status language everywhere</h2>
+      <p>The same chips appear in the feed, on receipts, in Money, and on portfolio sync — state is never color-alone; every chip pairs an icon + word. Reversed is amber (a refund is a warm correction, not a violet mystery).</p>
+    </div>
+    <div class="status-strip">
+      <div class="st"><span class="sw" style="background:var(--good)"></span><div><b>✓ Verified</b><span>confirmed via *99# history or bank SMS</span></div></div>
+      <div class="st"><span class="sw" style="background:#75837C"></span><div><b>◌ Checking</b><span>provisional — verification in flight</span></div></div>
+      <div class="st"><span class="sw" style="background:#DB8B2D"></span><div><b>↩ Reversed</b><span>debited, then refunded — both refs kept</span></div></div>
+      <div class="st"><span class="sw" style="background:var(--bad)"></span><div><b>✕ Failed</b><span>network-confirmed failure — retry offered</span></div></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Foundations</div>
+      <h2>Tokens — one system, two modes</h2>
+      <p>Each token is a light/dark pair (left = light, right = dark). Emerald is reserved for actions and brand
+      moments; semantic money colors never appear on buttons. Dark mode is re-tuned, never auto-inverted.</p>
+    </div>
+    <div class="tokens">
+      <div class="tok">
+        <h3>Color — app</h3>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#F2F5F2"></span><span class="swatch" style="background:#0A0F0D"></span></span> Ground <code>#F2F5F2 / #0A0F0D</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#FFFFFF"></span><span class="swatch" style="background:#121A16"></span></span> Surface <code>#FFFFFF / #121A16</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#0B6B4F"></span><span class="swatch" style="background:#34D88F"></span></span> Brand emerald / mint <code>#0B6B4F / #34D88F</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#0B8A5C"></span><span class="swatch" style="background:#34D88F"></span></span> Money-good <code>#0B8A5C / #34D88F</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#C1443A"></span><span class="swatch" style="background:#F26A5B"></span></span> Money-bad <code>#C1443A / #F26A5B</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#AE6A12"></span><span class="swatch" style="background:#F0A44B"></span></span> Reversed <code>#AE6A12 / #F0A44B</code></div>
+        <div class="swrow"><span class="pair"><span class="swatch" style="background:#75837C"></span><span class="swatch" style="background:#7C8D85"></span></span> In-progress <code>#75837C / #7C8D85</code></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">Green is deliberately both brand and money-good (the Cash&nbsp;App/Wise lineage): the brand tone is deep and sits on buttons; the semantic tone lives only in chips and deltas, always with icon + word.</p>
+      </div>
+      <div class="tok">
+        <h3>Type</h3>
+        <div class="swrow"><b style="font-size:17px">Display · 800</b><code>numerals, titles</code></div>
+        <div class="swrow"><span>Body · 400–650</span><code>rows, notes</code></div>
+        <div class="swrow"><span style="font-family:ui-monospace,Menlo,monospace">Mono · RRN 062803971607</span><code>refs</code></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+          Recommend <b>Bricolage Grotesque</b> for display numerals (₹ amounts, hero values) with
+          <b>tabular figures everywhere digits align</b>, system Roboto for body, and a mono face for
+          RRNs and account masks. Scale: 44 / 32 / 20 / 16 / 13.5 / 11.
+        </p>
+      </div>
+      <div class="tok">
+        <h3>Shape · Motion · Modes</h3>
+        <div class="swrow"><span>Sheet radius</span><code>26dp</code></div>
+        <div class="swrow"><span>Card radius</span><code>14–16dp</code></div>
+        <div class="swrow"><span>Chips</span><code>full round</code></div>
+        <div class="swrow"><span>Dock spring</span><code>stiff, no bounce</code></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+          Follows the system light/dark setting with an in-app override (Material&nbsp;3 dynamic color off —
+          the emerald identity is the brand). One signature motion: the dock's container-transform from
+          strip → composer → live status. Everything honors reduced-motion.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-head">
+      <div class="kicker">Delivery</div>
+      <h2>Three phases, nothing breaks</h2>
+      <p>Phase 1 is a pure re-skin plus navigation shell — every existing flow (one-shot dial, verification, SMS reconcile, recipient memory) carries over untouched underneath.</p>
+    </div>
+    <div class="phases">
+      <div class="phase p1">
+        <div class="pn">Phase 1 · UI revamp — ships first</div>
+        <h3>Pay tab + shell</h3>
+        <ul>
+          <li><b>Bottom nav</b> with Portfolio/Money as designed placeholders ("Coming soon" states using the real layouts)</li>
+          <li><b>Home = ledger feed + pay dock</b> (replaces current home)</li>
+          <li><b>Composer sheet</b> replaces ConfirmationActivity's form</li>
+          <li><b>Processing timeline</b> re-skins UssdInstructionActivity</li>
+          <li><b>Light + dark themes</b> from the token pairs above</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 2 · Portfolio</div>
+        <h3>Backend + charts</h3>
+        <ul>
+          <li><b>Import</b> Yahoo Finance portfolio (backend job) · holdings API</li>
+          <li><b>Quote cache</b> with as-of stamps for offline reads</li>
+          <li><b>Scrub chart</b> 1D–All ranges, holding detail pages</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 3 · Money</div>
+        <h3>Statements + accounting</h3>
+        <ul>
+          <li><b>Statement service</b> (PDF/CSV → normalized rows)</li>
+          <li><b>RRN auto-reconcile</b> against in-app UPI ledger</li>
+          <li><b>Categories</b> + rules + review inbox</li>
+          <li><b>Attachments</b> — invoices/bills on any transaction</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    UPI Assistant 2.0 · design proposal rev B — emerald/porcelain, dual mode · July 2026 —
+    mockups use real data shapes from device testing (recipient capture, *99*6*1# verification states, RRN reconciliation).
+    Local document · docs/design/upi-redesign.html
+  </div>
+</main>
+</body>
+</html>
