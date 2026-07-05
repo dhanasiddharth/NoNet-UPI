@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.Gravity
@@ -57,14 +56,11 @@ class MoneyFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        val filter = IntentFilter(SmsBroadcastReceiver.ACTION_BALANCES_UPDATED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireContext().registerReceiver(
-                balanceUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            requireContext().registerReceiver(balanceUpdateReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            requireContext(), balanceUpdateReceiver,
+            IntentFilter(SmsBroadcastReceiver.ACTION_BALANCES_UPDATED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // Load after the 220ms tab slide has finished so Keystore/JSON work
         // never janks the transition.
         view?.postDelayed({ if (_binding != null) loadBalances() }, 240)

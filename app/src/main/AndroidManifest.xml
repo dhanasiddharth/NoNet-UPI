@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <!-- USSD payments need a dialer/SIM; declare so the CALL/SMS permissions
+         don't silently exclude non-telephony devices from the required set. -->
+    <uses-feature android:name="android.hardware.telephony" android:required="true" />
 
     <application
         android:allowBackup="false"

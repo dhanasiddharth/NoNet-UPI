@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -29,7 +28,6 @@ import com.offlineupi.app.data.AccountStore
 import com.offlineupi.app.data.PinStore
 import com.offlineupi.app.data.RecipientStore
 import com.offlineupi.app.data.SecureBalanceStore
-import com.offlineupi.app.data.SecureBalanceStore.Companion.SOURCE_SMS
 import com.offlineupi.app.data.Transaction
 import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.databinding.ActivityUssdInstructionBinding
@@ -163,12 +161,11 @@ class UssdInstructionActivity : AppCompatActivity() {
         // Register for the whole activity lifetime: the USSD dialog belongs to
         // the phone app, so this activity is PAUSED during the entire session —
         // an onResume/onPause-scoped receiver misses every step broadcast.
-        val filter = IntentFilter(UssdAccessibilityService.ACTION_STEP_COMPLETED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(stepReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(stepReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this, stepReceiver,
+            IntentFilter(UssdAccessibilityService.ACTION_STEP_COMPLETED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         binding.btnRetry.setOnClickListener { retryTransaction() }
 

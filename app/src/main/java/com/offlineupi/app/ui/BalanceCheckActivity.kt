@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -97,12 +96,11 @@ class BalanceCheckActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val filter = IntentFilter(UssdAccessibilityService.ACTION_STEP_COMPLETED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(stepReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(stepReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this, stepReceiver,
+            IntentFilter(UssdAccessibilityService.ACTION_STEP_COMPLETED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onPause() {

@@ -8,6 +8,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -240,7 +241,6 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     private fun proceedWithDial(payeeAddress: String, amount: String?) {
-        // Check / request CALL_PHONE and dial *99#
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             == PackageManager.PERMISSION_GRANTED
         ) {
@@ -258,9 +258,12 @@ class ConfirmationActivity : AppCompatActivity() {
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("UPI ID", vpa))
         Toast.makeText(this, getString(R.string.toast_upi_copied), Toast.LENGTH_SHORT).show()
-        // Auto-clear clipboard after 60 seconds for privacy
         Handler(Looper.getMainLooper()).postDelayed({
-            clipboard.clearPrimaryClip()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                clipboard.clearPrimaryClip()
+            } else {
+                clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
         }, 60_000)
     }
 
