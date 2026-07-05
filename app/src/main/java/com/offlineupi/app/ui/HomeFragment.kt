@@ -16,6 +16,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.TextViewCompat
@@ -274,9 +275,18 @@ class HomeFragment : Fragment() {
         binding.etPayeeInput.imeOptions = EditorInfo.IME_ACTION_GO
         binding.btnKbToggle.text = "ABC"
         animateMorph(1f)
-        binding.etPayeeInput.requestFocus()
-        requireContext().getSystemService(InputMethodManager::class.java)
-            .showSoftInput(binding.etPayeeInput, InputMethodManager.SHOW_IMPLICIT)
+        // Focus on the next frame, once the morph has given the field width, and
+        // show the IME via the insets controller — showSoftInput(SHOW_IMPLICIT)
+        // is allowed to no-op on an adjustNothing window, which intermittently
+        // left the keyboard closed or unfocused.
+        binding.etPayeeInput.post {
+            val b = _binding ?: return@post
+            b.etPayeeInput.requestFocus()
+            activity?.window?.let { w ->
+                WindowCompat.getInsetsController(w, b.etPayeeInput)
+                    .show(WindowInsetsCompat.Type.ime())
+            }
+        }
     }
 
     private fun collapsePayeeInput() {

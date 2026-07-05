@@ -185,6 +185,11 @@ class TransactionReceiptActivity : AppCompatActivity() {
         binding.tvPayeeName.text =
             txn.storedName ?: contactName ?: (txn.payeeAddress ?: "Payment")
         binding.tvPayee.text = txn.payeeAddress ?: "-"
+        txn.payeeAddress?.let { addr ->
+            binding.tvPayee.setOnClickListener {
+                copyToClipboard(if (addr.contains('@')) "UPI ID" else "Phone number", addr)
+            }
+        }
 
         // Date & Time
         val dateFormat = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())

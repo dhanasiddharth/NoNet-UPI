@@ -30,7 +30,7 @@ import com.offlineupi.app.model.UpiPaymentData
 import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.UssdCodeBuilder
 import com.offlineupi.app.util.formatIndianNumber
-import com.offlineupi.app.util.formatMobileForDisplay
+import com.offlineupi.app.util.normalizeIndianMobile
 import com.offlineupi.app.viewmodel.ConfirmationViewModel
 import android.view.View
 
@@ -127,7 +127,9 @@ class ConfirmationActivity : AppCompatActivity() {
     private fun setupUI(data: UpiPaymentData) {
         if (payeeType == TYPE_PHONE) {
             binding.labelUpiId.text = "Phone Number"
-            binding.tvUpiId.text = "+91 ${formatMobileForDisplay(data.payeeAddress)}"
+            // Raw digits, not "+91 xx xxx" display formatting — the field is
+            // editable and the text is what gets dialed.
+            binding.tvUpiId.setText(data.payeeAddress)
             // Device-contact name is display-only: it never makes a recipient
             // "known" — the bank name is still captured via the USSD flow.
             val contactName = ContactsHelper.lookupPhone(this, data.payeeAddress)?.name
@@ -146,7 +148,7 @@ class ConfirmationActivity : AppCompatActivity() {
             }
         } else {
             binding.tvPayeeName.text = data.payeeName
-            binding.tvUpiId.text = data.payeeAddress
+            binding.tvUpiId.setText(data.payeeAddress)
         }
 
         if (data.hasAmount) {
@@ -178,6 +180,21 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     private fun handlePayment(data: UpiPaymentData) {
+        val raw = binding.tvUpiId.text?.toString().orEmpty().trim()
+        val address = if (raw.contains('@')) raw else normalizeIndianMobile(raw)
+        if (address.isNullOrBlank()) {
+            MaterialAlertDialogBuilder(this)
+                .setMessage("Enter a valid 10-digit phone number or a UPI ID (with @).")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        // The payee field is editable — retarget the flow if it was changed.
+        if (address != data.payeeAddress) {
+            payeeType = if (address.contains('@')) TYPE_VPA else TYPE_PHONE
+            knownRecipientName = recipientStore.getName(address)
+            initialPayeeName = knownRecipientName
+        }
+
         val finalAmount: String? = if (data.hasAmount) {
             data.amount
         } else {
@@ -188,7 +205,7 @@ class ConfirmationActivity : AppCompatActivity() {
 
         // Collect PIN before proceeding (skips dialog if already stored this session)
         PinEntryDialog.ensurePin(this) {
-            startPaymentFlow(data.payeeAddress, finalAmount, remarks)
+            startPaymentFlow(address, finalAmount, remarks)
         }
     }
 
