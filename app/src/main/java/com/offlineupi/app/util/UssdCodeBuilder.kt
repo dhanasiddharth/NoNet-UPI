@@ -37,6 +37,10 @@ object UssdCodeBuilder {
         /** *99*1*<method># — session opens at the payee (mobile/VPA) prompt. */
         PAYEE_PROMPT,
 
+        /** *99*1*1*<mobile># — session opens directly on the amount screen,
+         *  which shows the beneficiary name (captured for new recipients). */
+        AMOUNT_PROMPT,
+
         /** Payee + amount (+ remarks) embedded — session opens at confirm/PIN. */
         ONE_SHOT,
     }
@@ -49,23 +53,32 @@ object UssdCodeBuilder {
         payeeAddress: String,
         amount: String?,
         remarks: String?,
-        isPhone: Boolean
+        isPhone: Boolean,
+        recipientKnown: Boolean = true
     ): DialPlan {
         val method = if (isPhone) OPTION_TO_MOBILE else OPTION_TO_UPI_ID
         val base = "*99*$OPTION_SEND_MONEY*$method"
 
-        // Full one-shot only when every embedded value survives dialing intact.
-        // Non-digit remarks force the interactive path so they aren't dropped.
         val payeeSafe = isPhone && isDialSafe(payeeAddress)
         val amountSafe = amount != null && isDialSafe(amount)
         val remarksSafe = remarks == null || isDialSafe(remarks)
-        if (payeeSafe && amountSafe && remarksSafe) {
+
+        // Known recipient: full one-shot straight to the PIN.
+        if (recipientKnown && payeeSafe && amountSafe && remarksSafe) {
             // Per the NUUP spec the one-shot format always carries a remarks
             // segment; "1" disables remarks.
             val remarksSegment = remarks ?: "1"
             return DialPlan("$base*$payeeAddress*$amount*$remarksSegment#", Depth.ONE_SHOT)
         }
 
+        // New recipient with a dial-safe mobile: embed just the number so the
+        // session opens directly on the amount screen (which shows the name),
+        // in one dial — no menu walking — while still stopping short of the PIN.
+        if (payeeSafe) {
+            return DialPlan("$base*$payeeAddress#", Depth.AMOUNT_PROMPT)
+        }
+
+        // VPA / anything not dial-safe: deep link to the payee prompt.
         return DialPlan("$base#", Depth.PAYEE_PROMPT)
     }
 }

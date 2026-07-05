@@ -193,11 +193,22 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="TO (UPI ID)"
+                        android:text="TO"
                         android:textColor="@color/text_secondary"
                         android:textSize="11sp"
                         android:textAllCaps="true"
                         android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvPayeeName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_marginTop="2dp"
+                        android:visibility="gone" />
 
                     <TextView
                         android:id="@+id/tvPayee"

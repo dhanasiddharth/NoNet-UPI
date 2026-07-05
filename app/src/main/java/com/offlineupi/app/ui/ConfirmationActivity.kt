@@ -22,6 +22,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
+import com.offlineupi.app.data.RecipientStore
 import com.offlineupi.app.model.UpiPaymentData
 import com.offlineupi.app.util.UssdCodeBuilder
 import com.offlineupi.app.util.formatIndianNumber
@@ -57,8 +58,11 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     private var payeeType: String = TYPE_VPA
+    private var knownRecipientName: String? = null
+    private var initialPayeeName: String? = null
 
     private lateinit var binding: ActivityConfirmationBinding
+    private lateinit var recipientStore: RecipientStore
     private val viewModel: ConfirmationViewModel by viewModels()
 
     // Holds the USSD string while waiting for permission result
@@ -85,12 +89,25 @@ class ConfirmationActivity : AppCompatActivity() {
         binding = ActivityConfirmationBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        recipientStore = RecipientStore(this)
+
         val payeeAddress = intent.getStringExtra(EXTRA_PAYEE_ADDRESS)
         val payeeName   = intent.getStringExtra(EXTRA_PAYEE_NAME)
         val amount      = intent.getStringExtra(EXTRA_AMOUNT)
         payeeType = intent.getStringExtra(EXTRA_PAYEE_TYPE) ?: TYPE_VPA
 
         if (payeeAddress.isNullOrBlank()) { finish(); return }
+
+        // A name we've captured before makes this a "known" recipient → fast one-shot.
+        knownRecipientName = recipientStore.getName(payeeAddress)
+
+        // Seed the receipt name: remembered name, else the QR-provided name (VPA).
+        initialPayeeName = knownRecipientName
+            ?: payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
+        // A VPA that arrived with a name is effectively known.
+        if (payeeType == TYPE_VPA && !initialPayeeName.isNullOrBlank() && payeeAddress.isNotBlank()) {
+            recipientStore.saveName(payeeAddress, initialPayeeName!!)
+        }
 
         val data = UpiPaymentData(
             payeeAddress = payeeAddress,
@@ -104,12 +121,20 @@ class ConfirmationActivity : AppCompatActivity() {
 
     private fun setupUI(data: UpiPaymentData) {
         if (payeeType == TYPE_PHONE) {
-            // Phone mode — hide payee name row (name comes from USSD), show phone number
-            binding.labelPayTo.visibility = View.GONE
-            binding.tvPayeeName.visibility = View.GONE
-            binding.dividerPayee.visibility = View.GONE
             binding.labelUpiId.text = "Phone Number"
             binding.tvUpiId.text = "+91 ${formatMobileForDisplay(data.payeeAddress)}"
+            if (!knownRecipientName.isNullOrBlank()) {
+                // Known recipient — show the remembered name.
+                binding.labelPayTo.visibility = View.VISIBLE
+                binding.tvPayeeName.visibility = View.VISIBLE
+                binding.dividerPayee.visibility = View.VISIBLE
+                binding.tvPayeeName.text = knownRecipientName
+            } else {
+                // Unknown — name will be captured from the USSD flow.
+                binding.labelPayTo.visibility = View.GONE
+                binding.tvPayeeName.visibility = View.GONE
+                binding.dividerPayee.visibility = View.GONE
+            }
         } else {
             binding.tvPayeeName.text = data.payeeName
             binding.tvUpiId.text = data.payeeAddress
@@ -173,7 +198,8 @@ class ConfirmationActivity : AppCompatActivity() {
         UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks, mode)
 
         dialPlan = UssdCodeBuilder.buildPaymentPlan(
-            payeeAddress, amount, remarks, payeeType == TYPE_PHONE
+            payeeAddress, amount, remarks, payeeType == TYPE_PHONE,
+            recipientKnown = !knownRecipientName.isNullOrBlank()
         )
 
         if (!isAccessibilityServiceEnabled()) {
@@ -262,6 +288,7 @@ class ConfirmationActivity : AppCompatActivity() {
             putExtra(UssdInstructionActivity.EXTRA_PAYEE_TYPE, payeeType)
             putExtra(UssdInstructionActivity.EXTRA_DIAL_CODE, dialPlan?.code ?: UssdCodeBuilder.ENTRY_CODE)
             putExtra(UssdInstructionActivity.EXTRA_DIAL_DEPTH, (dialPlan?.depth ?: UssdCodeBuilder.Depth.MENU_ONLY).name)
+            putExtra(UssdInstructionActivity.EXTRA_PAYEE_NAME, initialPayeeName)
         })
     }
 }

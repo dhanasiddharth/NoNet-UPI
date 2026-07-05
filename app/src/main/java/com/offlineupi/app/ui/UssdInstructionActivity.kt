@@ -25,6 +25,7 @@ import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.data.AccountStore
 import com.offlineupi.app.data.PinStore
+import com.offlineupi.app.data.RecipientStore
 import com.offlineupi.app.data.SecureBalanceStore
 import com.offlineupi.app.data.SecureBalanceStore.Companion.SOURCE_SMS
 import com.offlineupi.app.data.Transaction
@@ -43,6 +44,7 @@ class UssdInstructionActivity : AppCompatActivity() {
         const val EXTRA_AMOUNT = "extra_amount"
         const val EXTRA_REMARKS = "extra_remarks"
         const val EXTRA_PAYEE_TYPE = "extra_payee_type"
+        const val EXTRA_PAYEE_NAME = "extra_payee_name"
         const val EXTRA_DIAL_CODE = "extra_dial_code"
         const val EXTRA_DIAL_DEPTH = "extra_dial_depth"
 
@@ -56,6 +58,7 @@ class UssdInstructionActivity : AppCompatActivity() {
     private lateinit var transactionStore: TransactionStore
     private lateinit var accountStore: AccountStore
     private lateinit var balanceStore: SecureBalanceStore
+    private lateinit var recipientStore: RecipientStore
     private var payeeAddress = ""
     private var amount: String? = null
     private var remarks: String? = null
@@ -99,8 +102,12 @@ class UssdInstructionActivity : AppCompatActivity() {
                 accountStore.saveAccountNumber(accountNumber)
                 if (bankName != null) accountStore.saveBankName(bankName)
             }
-            if (payeeName != null && capturedPayeeName.isNullOrBlank()) {
+            if (!payeeName.isNullOrBlank()) {
+                // The live USSD name is bank-verified — authoritative over any
+                // seeded/stored value (fixes a previously mis-captured name).
                 capturedPayeeName = payeeName
+                if (payeeAddress.isNotBlank()) recipientStore.saveName(payeeAddress, payeeName)
+                updateTitleWithName()
             }
             onStepCompleted(step, resultText)
         }
@@ -129,11 +136,13 @@ class UssdInstructionActivity : AppCompatActivity() {
         transactionStore = TransactionStore(this)
         accountStore = AccountStore(this)
         balanceStore = SecureBalanceStore(this)
+        recipientStore = RecipientStore(this)
 
         payeeAddress = intent.getStringExtra(EXTRA_PAYEE_ADDRESS) ?: ""
         amount = intent.getStringExtra(EXTRA_AMOUNT)
         remarks = intent.getStringExtra(EXTRA_REMARKS)
         payeeType = intent.getStringExtra(EXTRA_PAYEE_TYPE) ?: ConfirmationActivity.TYPE_VPA
+        capturedPayeeName = intent.getStringExtra(EXTRA_PAYEE_NAME)?.takeIf { it.isNotBlank() }
         dialCode = intent.getStringExtra(EXTRA_DIAL_CODE) ?: UssdCodeBuilder.ENTRY_CODE
         dialDepth = intent.getStringExtra(EXTRA_DIAL_DEPTH)
             ?.let { runCatching { UssdCodeBuilder.Depth.valueOf(it) }.getOrNull() }
@@ -145,6 +154,7 @@ class UssdInstructionActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener { goHome() }
         onBackPressedDispatcher.addCallback(this) { goHome() }
 
+        updateTitleWithName()
         setupSteps()
         requestSmsPermission()
 
@@ -169,6 +179,12 @@ class UssdInstructionActivity : AppCompatActivity() {
         }
 
         binding.btnDone.setOnClickListener { goHome() }
+    }
+
+    /** Once the recipient name is known, show it as the screen title. */
+    private fun updateTitleWithName() {
+        binding.toolbar.title = capturedPayeeName?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.ussd_title)
     }
 
     private fun goHome() {
@@ -342,6 +358,16 @@ class UssdInstructionActivity : AppCompatActivity() {
                     if (PinStore.hasPin()) R.string.ussd_step5_autofill else R.string.ussd_step5_ready
                 )
                 binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_oneshot)
+            }
+            UssdCodeBuilder.Depth.AMOUNT_PROMPT -> {
+                // Number embedded in the dial — session opens on the amount
+                // screen, which reveals the recipient name.
+                markPriorStepsDone(3)
+                setStepActive(binding.tvStep4Status)
+                binding.tvUssdSubtitle.text = getString(
+                    if (autoFilling) R.string.ussd_subtitle_deeplink_autofill
+                    else R.string.ussd_subtitle_deeplink
+                )
             }
             UssdCodeBuilder.Depth.PAYEE_PROMPT -> {
                 markPriorStepsDone(2)

@@ -641,9 +641,13 @@ class UssdAccessibilityService : AccessibilityService() {
 
         // Non-menu prompts: identify by keywords in order of specificity
         return when {
-            // Amount prompt
-            message.contains("amount") ->
+            // Amount prompt — often shows "You are paying to <name>"; capture it.
+            message.contains("amount") -> {
+                if (capturedPayeeName == null) {
+                    parsePayeeName(message)?.let { capturedPayeeName = it }
+                }
                 STEP_AMOUNT_ENTERED to (amount ?: return null)
+            }
 
             // Phone number prompt (phone mode only)
             isPhoneMode && (message.contains("mobile") || message.contains("phone")) ->
@@ -660,22 +664,67 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Extracts the beneficiary name from a confirmation prompt.
+     * Extracts the beneficiary name from a confirmation/amount/PIN prompt.
      * e.g. "Send Rs. 100 to RAM KUMAR? 1. Yes 2. No" → "RAM KUMAR"
+     *      "Paying VINOTHINI P, A/c ..." → "VINOTHINI P"
      */
     private fun parsePayeeName(message: String): String? {
         val cleaned = message.replace("\n", " ").trim()
+        // Name ends at punctuation, a digit, or a following boilerplate word
+        // ("Enter your UPI PIN", "will be debited", "Rs.5.00", "a/c …").
+        val end = """(?=\s+(?:of|for|enter|will|rs|inr|upi|pin|a/c|account|on|is|has|and|the)\b|\s*[?.,;:]|\s*\d|\s*1\.|$)"""
         val patterns = listOf(
-            Regex("""to\s+([A-Za-z][A-Za-z\s.]+?)(?=\s+of\b|\s+for\b|\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE),
-            Regex("""name\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?=\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE),
-            Regex("""beneficiary\s*:?\s*([A-Za-z][A-Za-z\s.]+?)(?=\s*[?.,]|\s*\d|\s*1\.)""", RegexOption.IGNORE_CASE)
+            Regex("""\bto\s+([A-Za-z][A-Za-z\s.]+?)$end""", RegexOption.IGNORE_CASE),
+            Regex("""name\s*:?\s*([A-Za-z][A-Za-z\s.]+?)$end""", RegexOption.IGNORE_CASE),
+            Regex("""beneficiary\s*:?\s*([A-Za-z][A-Za-z\s.]+?)$end""", RegexOption.IGNORE_CASE),
+            // "Paying <NAME>" — the amount screen shown by the one-dial deep link.
+            // Skip "paying to", "paying Rs", "paying INR".
+            Regex("""pay(?:ing)?\s+(?!to\b|rs\b|inr\b|rs\.)([A-Za-z][A-Za-z\s.]+?)$end""", RegexOption.IGNORE_CASE)
         )
         for (pattern in patterns) {
-            val match = pattern.find(cleaned) ?: continue
-            val name = match.groupValues[1].trim().trimEnd('.', ',')
-            if (name.length in 2..60) return name
+            // A pattern can match more than once ("paying to X … to proceed").
+            // Take the first match that cleans up to a plausible name.
+            for (match in pattern.findAll(cleaned)) {
+                val name = cleanName(match.groupValues[1])
+                if (isPlausibleName(name)) return name
+            }
         }
         return null
+    }
+
+    // Instruction words that follow "to"/"paying" but aren't names,
+    // e.g. "Enter PIN to proceed", "press 1 to confirm".
+    private val nameStopwords = setOf(
+        "proceed", "continue", "confirm", "cancel", "exit", "pay", "enter",
+        "skip", "send", "save", "yes", "no", "back", "retry", "complete",
+        "make", "transaction", "verify", "check", "select", "choose", "the"
+    )
+
+    // Trailing tokens that are transaction boilerplate, not part of the name.
+    private val nameTrailingNoise = setOf(
+        "rs", "rs.", "inr", "will", "be", "debited", "account", "a/c",
+        "of", "for", "amount", "your", "upi"
+    )
+
+    /** Trims trailing amount/boilerplate tokens from a captured name. */
+    private fun cleanName(raw: String): String {
+        var tokens = raw.trim().trimEnd('.', ',', ' ')
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.toMutableList()
+        while (tokens.isNotEmpty() &&
+            (tokens.last().lowercase().trimEnd('.', ',') in nameTrailingNoise ||
+                tokens.last().any { it.isDigit() })
+        ) {
+            tokens.removeAt(tokens.size - 1)
+        }
+        return tokens.joinToString(" ")
+    }
+
+    private fun isPlausibleName(name: String): Boolean {
+        if (name.length !in 2..60) return false
+        val tokens = name.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return false
+        if (tokens.first() in nameStopwords) return false
+        return true
     }
 
     /**

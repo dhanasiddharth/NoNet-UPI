@@ -140,7 +140,13 @@ class TransactionReceiptActivity : AppCompatActivity() {
             binding.dividerAccount.visibility = View.GONE
         }
 
-        // Payee
+        // Payee — show captured name (if any) above the address
+        if (!txn.payeeName.isNullOrBlank() && txn.payeeName != "Unknown Payee") {
+            binding.tvPayeeName.text = txn.payeeName
+            binding.tvPayeeName.visibility = View.VISIBLE
+        } else {
+            binding.tvPayeeName.visibility = View.GONE
+        }
         binding.tvPayee.text = txn.payeeAddress ?: "-"
 
         // Date & Time
