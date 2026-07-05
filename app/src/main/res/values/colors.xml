@@ -1,9 +1,8 @@
 <resources>
-    <!-- Emerald-on-green-black palette (UPI Assistant 2.0) -->
+    <!-- Emerald-on-green-black palette (Finance v2) -->
 
     <!-- Backgrounds -->
     <color name="bg_dark">#0A0F0D</color>
-    <color name="bg_elevated">#101815</color>
     <color name="bg_scanner">#000000</color>
     <color name="scanner_overlay">#CC000000</color>
 
@@ -19,9 +18,7 @@
     <color name="text_secondary_light">#B7C4BD</color>
     <color name="white">#FFFFFF</color>
 
-    <!-- Brand accent - Emerald (buttons keep the historical name to avoid churn) -->
-    <color name="accent_indigo">#0E9E6E</color>
-    <color name="accent_indigo_light">#34D88F</color>
+    <!-- Brand accent -->
     <color name="accent_emerald">#0E9E6E</color>
     <color name="accent_emerald_light">#34D88F</color>
     <color name="on_accent">#FFFFFF</color>
@@ -31,7 +28,4 @@
     <color name="accent_amber">#F0A44B</color>
     <color name="accent_red">#F26A5B</color>
     <color name="status_progress">#7C8D85</color>
-
-    <!-- Disclaimer card -->
-    <color name="disclaimer_bg">#151F12</color>
 </resources>

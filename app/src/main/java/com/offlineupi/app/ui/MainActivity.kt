@@ -13,6 +13,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.offlineupi.app.R
 import com.offlineupi.app.data.Transaction
 import com.offlineupi.app.data.TransactionStore
+import com.offlineupi.app.data.storedName
 import com.offlineupi.app.databinding.ActivityMainBinding
 import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.formatMobileForDisplay
@@ -23,8 +24,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Single host for the four tabs. The bottom nav stays fixed; tab content
- * slides in as fragments (quick 220ms directional slide, no fades).
+ * Hosts the four tabs in a ViewPager2 so they are swipeable; the bottom
+ * nav stays fixed and only tab content moves.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -143,8 +144,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         fun displayName(t: Transaction): String {
-            val n = t.payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-            if (n != null) return n
+            t.storedName?.let { return it }
             val addr = t.payeeAddress ?: return "Payment"
             return if (addr.contains('@')) addr else "+91 ${formatMobileForDisplay(addr)}"
         }

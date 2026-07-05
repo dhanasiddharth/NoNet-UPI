@@ -1,23 +1,10 @@
 <resources>
     <string name="app_name">Finance</string>
 
-    <!-- About Screen -->
-    <string name="about_description">UPI Assistant lets you pay via USSD (*99#) by scanning a UPI QR code or entering a phone number or UPI ID. It tracks your transaction history and account balances, and automates the USSD payment flow end-to-end.</string>
-    <string name="about_features">• Scan UPI QR codes\n• Pay by phone number or UPI ID (unified input)\n• Auto-fill USSD payment flow\n• UPI PIN auto-fill (stored in memory only)\n• Transaction history with RRN matching\n• Retry failed transactions\n• Account balance tracking\n• Missed-call balance check\n• No tracking or analytics</string>
-    <string name="about_privacy_note">This application does NOT process payments directly. UPI PIN is stored in memory only and cleared on reboot. Transaction and balance data is stored encrypted on-device. USSD service availability depends on telecom operator and bank support.</string>
-    <string name="about_version_label">Version</string>
-    <string name="about_features_title">Features</string>
-    <string name="about_privacy_title">Privacy &amp; Disclaimer</string>
-    <string name="btn_about">About</string>
-    <string name="home_subtitle">Pay via USSD (*99#).\nScan any UPI QR code to get started.</string>
-    <string name="btn_scan_qr">Scan QR Code</string>
-    <string name="offline_badge">✓ Pay via USSD · Works without internet</string>
-
     <!-- Scanner -->
     <string name="scan_title">Scan UPI QR</string>
     <string name="scan_instruction">Point camera at a UPI QR code</string>
     <string name="camera_permission_rationale">Camera access is required to scan QR codes</string>
-    <string name="btn_back">Back</string>
 
     <!-- Confirmation -->
     <string name="confirm_title">Confirm Payment</string>
@@ -86,10 +73,8 @@
     <string name="pin_submit">Continue</string>
     <string name="pin_clear">Clear</string>
     <string name="pin_backspace">\u232B</string>
-    <string name="pin_saved_badge">PIN saved for this session</string>
 
     <!-- Balance Check -->
-    <string name="btn_check_balance">Check Balance</string>
     <string name="balance_title">Check Balance</string>
     <string name="balance_subtitle">*99# has been dialed. Balance check in progress.</string>
     <string name="balance_subtitle_pin">Enter your UPI PIN to view balance.</string>
@@ -110,19 +95,15 @@
     <string name="balance_result_label">Available Balance</string>
     <string name="balance_error_generic">Unable to retrieve balance. Please try again.</string>
     <string name="balance_security_note">Balance is stored encrypted on your device only. No data is sent over the network.</string>
-    <string name="balance_card_title">Account Balance</string>
-    <string name="balance_last_checked">Last checked: %1$s</string>
-    <string name="balance_not_checked">Tap to check your balance via USSD</string>
 
     <!-- Accessibility Service -->
     <string name="accessibility_service_description">Auto-fills USSD (*99#) prompts including UPI ID, amount, and optionally UPI PIN from scanned QR codes.</string>
     <string name="accessibility_prompt_title">Enable USSD Auto-Fill</string>
-    <string name="accessibility_prompt_message">Enable the UPI Assistant accessibility service to automatically fill USSD payment prompts (Send Money, UPI ID, amount, and UPI PIN if saved).</string>
+    <string name="accessibility_prompt_message">Enable the Finance accessibility service to automatically fill USSD payment prompts (Send Money, UPI ID, amount, and UPI PIN if saved).</string>
     <string name="accessibility_prompt_enable">Open Settings</string>
     <string name="accessibility_prompt_skip">Skip</string>
 
     <!-- Errors -->
     <string name="error_camera_permission_denied">Camera permission denied. Cannot scan QR codes.</string>
     <string name="error_camera_unavailable">Camera is unavailable on this device.</string>
-    <string name="error_invalid_qr">Invalid QR: Not a UPI payment code.</string>
 </resources>

@@ -3,6 +3,10 @@ package com.offlineupi.app.data
 import org.json.JSONObject
 import java.util.UUID
 
+/** Payee name only if one was actually captured — filters the legacy "Unknown Payee" placeholder. */
+val Transaction.storedName: String?
+    get() = payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
+
 data class Transaction(
     val id: String = UUID.randomUUID().toString(),
     val type: String, // "payment" or "balance_check"

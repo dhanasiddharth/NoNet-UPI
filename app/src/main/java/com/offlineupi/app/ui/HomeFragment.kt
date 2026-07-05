@@ -1,17 +1,24 @@
 package com.offlineupi.app.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
+import android.text.InputType
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -20,6 +27,7 @@ import com.offlineupi.app.R
 import com.offlineupi.app.data.SecureBalanceStore
 import com.offlineupi.app.data.Transaction
 import com.offlineupi.app.data.TransactionStore
+import com.offlineupi.app.data.storedName
 import com.offlineupi.app.databinding.FragmentHomeBinding
 import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.formatIndianNumber
@@ -59,8 +67,6 @@ class HomeFragment : Fragment() {
         binding.etPayeeInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) { submitPayeeInput(); true } else false
         }
-
-        binding.balancePill.setOnClickListener { toggleBalance() }
 
         setupImeChoreography()
     }
@@ -182,7 +188,7 @@ class HomeFragment : Fragment() {
     // Scan QR shrinks to a 52dp square (corners intact, label hidden), the pill
     // collapses as the input grows into its place, Pay grows in at the end.
     private var inputExpanded = false
-    private var morphAnimator: android.animation.ValueAnimator? = null
+    private var morphAnimator: ValueAnimator? = null
 
     private fun setPayRowMorph(p: Float) {
         val b = _binding ?: return
@@ -203,7 +209,7 @@ class HomeFragment : Fragment() {
         val toggleWNow = lerp(0, toggleW)
 
         fun setW(v: View, w: Int, endGap: Int) {
-            val lp = v.layoutParams as android.widget.LinearLayout.LayoutParams
+            val lp = v.layoutParams as LinearLayout.LayoutParams
             lp.width = w; lp.weight = 0f; lp.marginEnd = endGap
             v.layoutParams = lp
         }
@@ -231,12 +237,12 @@ class HomeFragment : Fragment() {
     private fun animateMorph(to: Float, onDone: (() -> Unit)? = null) {
         morphAnimator?.cancel()
         val from = if (to == 1f) 0f else 1f
-        morphAnimator = android.animation.ValueAnimator.ofFloat(from, to).apply {
+        morphAnimator = ValueAnimator.ofFloat(from, to).apply {
             duration = 220
             interpolator = DecelerateInterpolator(1.5f)
             addUpdateListener { setPayRowMorph(it.animatedValue as Float) }
-            addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
                     onDone?.invoke()
                 }
             })
@@ -247,12 +253,11 @@ class HomeFragment : Fragment() {
     /** Phone keypad by default (most payees are numbers); ABC switches to text for UPI IDs. */
     private fun toggleKeyboardMode() {
         val b = _binding ?: return
-        val toPhone = b.etPayeeInput.inputType != android.text.InputType.TYPE_CLASS_PHONE
+        val toPhone = b.etPayeeInput.inputType != InputType.TYPE_CLASS_PHONE
         b.etPayeeInput.inputType = if (toPhone) {
-            android.text.InputType.TYPE_CLASS_PHONE
+            InputType.TYPE_CLASS_PHONE
         } else {
-            android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         }
         b.etPayeeInput.imeOptions = EditorInfo.IME_ACTION_GO
         b.btnKbToggle.text = if (toPhone) "ABC" else "123"
@@ -265,7 +270,7 @@ class HomeFragment : Fragment() {
         if (inputExpanded) return
         inputExpanded = true
         // Always start in number mode — the common case is a phone number.
-        binding.etPayeeInput.inputType = android.text.InputType.TYPE_CLASS_PHONE
+        binding.etPayeeInput.inputType = InputType.TYPE_CLASS_PHONE
         binding.etPayeeInput.imeOptions = EditorInfo.IME_ACTION_GO
         binding.btnKbToggle.text = "ABC"
         animateMorph(1f)
@@ -320,10 +325,9 @@ class HomeFragment : Fragment() {
         for (t in store.getTransactions()) {
             if (t.type != "payment") continue
             val addr = t.payeeAddress ?: continue
-            val hasStoredName = !t.payeeName.isNullOrBlank() && t.payeeName != "Unknown Payee"
             val hasContactName =
                 ContactsHelper.lookupPhone(requireContext(), addr)?.name != null
-            if (!hasStoredName && !hasContactName) continue
+            if (t.storedName == null && !hasContactName) continue
             if (!seen.containsKey(addr)) seen[addr] = t
             if (seen.size >= MainActivity.MAX_RECENTS) break
         }
@@ -415,8 +419,7 @@ internal class FeedAdapter(
             avatar.text = MainActivity.initials(t.payeeName, t.payeeAddress)
             avatar.setBackgroundResource(MainActivity.avatarBgFor(t.payeeAddress ?: t.id))
             val contactName = ContactsHelper.applyPhotoToAvatar(avatar, t.payeeAddress)
-            val stored = t.payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-            payee.text = stored ?: contactName ?: MainActivity.displayName(t)
+            payee.text = t.storedName ?: contactName ?: MainActivity.displayName(t)
             sub.text = MainActivity.timeLabel(t.timestamp)
 
             amount.text = t.amount?.let { "− ₹${formatIndianNumber(it)}" } ?: "−"
@@ -438,8 +441,8 @@ internal class FeedAdapter(
             chip.setBackgroundResource(bg)
             chip.setTextColor(ctx.getColor(color))
             chip.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-            androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(
-                chip, android.content.res.ColorStateList.valueOf(ctx.getColor(color))
+            TextViewCompat.setCompoundDrawableTintList(
+                chip, ColorStateList.valueOf(ctx.getColor(color))
             )
             chip.compoundDrawablePadding = (4 * ctx.resources.displayMetrics.density).toInt()
 
@@ -467,8 +470,7 @@ internal class RecentsAdapter(
             avatar.text = MainActivity.initials(t.payeeName, t.payeeAddress)
             avatar.setBackgroundResource(MainActivity.avatarBgFor(t.payeeAddress ?: t.id))
             val contactName = ContactsHelper.applyPhotoToAvatar(avatar, t.payeeAddress)
-            val stored = t.payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-            name.text = (stored ?: contactName ?: MainActivity.displayName(t))
+            name.text = (t.storedName ?: contactName ?: MainActivity.displayName(t))
                 .substringBefore(" ").take(10)
             itemView.setOnClickListener { onClick(t) }
         }

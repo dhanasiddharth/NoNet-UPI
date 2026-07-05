@@ -3,6 +3,8 @@ package com.offlineupi.app.ui
 import com.offlineupi.app.util.applySystemBarInsets
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -18,6 +20,7 @@ import androidx.core.content.FileProvider
 import com.offlineupi.app.R
 import com.offlineupi.app.data.SecureBalanceStore
 import com.offlineupi.app.data.TransactionStore
+import com.offlineupi.app.data.storedName
 import com.offlineupi.app.databinding.ActivityTransactionReceiptBinding
 import com.offlineupi.app.sms.SmsInboxReader
 import com.offlineupi.app.util.ContactsHelper
@@ -71,8 +74,7 @@ class TransactionReceiptActivity : AppCompatActivity() {
     private fun addUpiIdToContact(upiId: String, name: String?) {
         val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
             type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
-            name?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-                ?.let { putExtra(ContactsContract.Intents.Insert.NAME, it) }
+            name?.let { putExtra(ContactsContract.Intents.Insert.NAME, it) }
             putExtra(ContactsContract.Intents.Insert.NOTES, "UPI ID: $upiId")
             // UPI IDs share the email format, so file it there too for visibility
             putExtra(ContactsContract.Intents.Insert.EMAIL, upiId)
@@ -91,14 +93,14 @@ class TransactionReceiptActivity : AppCompatActivity() {
         if (txn == null) { finish(); return }
 
         // Avatar initials from payee name; a device-contact photo replaces it
-        binding.tvAvatar.text = initialsFor(txn.payeeName, txn.payeeAddress)
+        binding.tvAvatar.text = MainActivity.initials(txn.payeeName, txn.payeeAddress)
         val contactName = ContactsHelper.applyPhotoToAvatar(binding.tvAvatar, txn.payeeAddress)
 
         // "Add UPI ID to contact" — only when the payee is a UPI ID
         val vpa = txn.payeeAddress?.takeIf { it.contains('@') }
         binding.btnAddToContact.visibility = if (vpa != null) View.VISIBLE else View.GONE
         binding.btnAddToContact.setOnClickListener {
-            addUpiIdToContact(vpa ?: return@setOnClickListener, txn.payeeName)
+            addUpiIdToContact(vpa ?: return@setOnClickListener, txn.storedName)
         }
 
         // Status \u2014 small badge on the avatar + status word (Google Pay style)
@@ -180,8 +182,8 @@ class TransactionReceiptActivity : AppCompatActivity() {
         }
 
         // Hero name — captured name, else the address as the title
-        val heroName = txn.payeeName?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-        binding.tvPayeeName.text = heroName ?: contactName ?: (txn.payeeAddress ?: "Payment")
+        binding.tvPayeeName.text =
+            txn.storedName ?: contactName ?: (txn.payeeAddress ?: "Payment")
         binding.tvPayee.text = txn.payeeAddress ?: "-"
 
         // Date & Time
@@ -231,26 +233,9 @@ class TransactionReceiptActivity : AppCompatActivity() {
         }
     }
 
-    /** Two-letter initials from the payee name, else a person glyph. */
-    private fun initialsFor(name: String?, address: String?): String {
-        val clean = name?.takeIf { it.isNotBlank() && it != "Unknown Payee" }
-        if (clean != null) {
-            val parts = clean.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-            val letters = when {
-                parts.size >= 2 -> "${parts[0].first()}${parts[1].first()}"
-                parts.isNotEmpty() -> parts[0].take(2)
-                else -> ""
-            }.uppercase()
-            if (letters.isNotBlank()) return letters
-        }
-        // VPA / phone fallback: first alpha char, else a person glyph
-        val firstAlpha = address?.firstOrNull { it.isLetter() }?.uppercase()
-        return firstAlpha ?: "👤"
-    }
-
     private fun copyToClipboard(label: String, value: String) {
-        val cb = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        cb.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+        val cb = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        cb.setPrimaryClip(ClipData.newPlainText(label, value))
         Toast.makeText(this, "$label copied", Toast.LENGTH_SHORT).show()
     }
 
