@@ -83,6 +83,7 @@
   .tile .n{font-size:11px; font-weight:700; color:var(--muted); display:flex; align-items:center; gap:5px}
   .tile .n i{width:7px;height:7px;border-radius:50%;background:var(--tc)}
   .tile .val{font-size:13px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; white-space:nowrap; letter-spacing:-.01em}
+  .tile .tsp{margin-top:4px; opacity:.85; height:18px}
   .tile .d{font-size:11px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
   .d.up{color:var(--good)} .d.down{color:var(--bad)} .d.flat{color:var(--muted)}
 
@@ -152,6 +153,7 @@
   .grp .gv{margin-left:auto; font-variant-numeric:tabular-nums; letter-spacing:0}
   .hrow{display:flex; align-items:center; gap:10px; padding:10px 2px; border-top:1px solid var(--stroke); cursor:pointer}
   .hrow .hl{flex:1; min-width:0}
+  .hrow .hspark{flex:none; opacity:.8}
   .hrow .hn{font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .hrow .hs{font-size:11.5px; color:var(--muted); margin-top:1px}
   .hrow .hr{text-align:right}
@@ -285,7 +287,7 @@
 
           <div class="card">
             <div class="head"><span class="label">Movement alerts</span><span class="chip flat" style="font-size:10.5px">event-driven · no digests</span></div>
-            <div class="rule">Alert when any holding moves <b>&nbsp;±4%&nbsp;</b> in a day <span class="edit">Edit</span></div>
+            <div class="rule"><span style="flex:1">Any holding moves <b>±4%</b> in a day</span> <span class="edit">Edit</span></div>
             <div class="rule" style="margin-top:6px">3 holdings have custom thresholds <span class="edit">Manage</span></div>
             <div id="alerts" style="margin-top:6px"></div>
           </div>
@@ -305,16 +307,22 @@
       </div></div></div>
 
       <aside class="notes">
+        <h3>Currency policy</h3>
+        <ul>
+          <li><strong>₹ exists only at the whole-portfolio level</strong> — the hero, the portfolio chart and the allocation percentages, where a common unit is unavoidable. Everything below reads in its own currency: US &amp; crypto in $, India &amp; gold in ₹.</li>
+          <li>That includes performance: US XIRR is computed on <em>dollar</em> cashflows vs the S&amp;P in dollars, so rupee depreciation can't masquerade as stock-picking skill.</li>
+        </ul>
         <h3>Hero &amp; market tiles</h3>
         <ul>
-          <li><strong>India · US · Gold · Crypto tiles</strong> mirror the sheet's Summary. Tapping one refocuses the whole screen — chart, readout and label follow. Tap again for total.</li>
+          <li><strong>India · US · Gold · Crypto tiles</strong> mirror the sheet's Summary, each in its native currency with a 30-day sparkline (the Apple-Stocks / Copilot pattern). Tapping one refocuses the whole screen — chart, readout, currency follow. Tap again for total.</li>
           <li>The eye masks every number (blur, not removal — layout never shifts). Same pattern as the Pay tab balance pill.</li>
           <li>Day change is close-over-close from the synced daily bars; the sync chip shows staleness instead of a spinner.</li>
         </ul>
         <h3>Performance chart</h3>
         <ul>
-          <li>One y-axis, ₹ only. <strong>vs index ⇄</strong> overlays two references: the gray line is <em>the same cashflows bought into Nifty 50 / S&amp;P 500 on the same dates</em>, the dotted line is money invested. The gap between emerald and gray is your alpha, visible per range.</li>
-          <li>Scrub anywhere — the readout above the chart becomes the scrubbed date; release to return to "now". No tooltips floating over data.</li>
+          <li>One y-axis. Portfolio view is ₹; a selected bucket redraws in its own currency. <strong>vs index ⇄</strong> (portfolio view) overlays two references: the gray line is <em>the same cashflows bought into Nifty 50 / S&amp;P 500 on the same dates</em>, the dotted line is money invested. The gap between emerald and gray is your alpha, visible per range.</li>
+          <li>Scrub anywhere — the readout above the chart becomes the scrubbed date (the Robinhood interaction); release to return to "now". No tooltips floating over data.</li>
+          <li>The change chip separates growth from contributions ("added ₹…") — a value chart that counts deposits as gains is the classic portfolio-app lie.</li>
           <li>Ranges are windows over locally stored daily bars — switching is instant and offline.</li>
         </ul>
         <h3>Allocation (the Google-Finance upgrade)</h3>
@@ -410,10 +418,18 @@ const $ = id => document.getElementById(id);
 
 /* ---------- formatting ---------- */
 const inr = new Intl.NumberFormat('en-IN',{maximumFractionDigits:0});
+const usd = new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
 function cr(v){ const a=Math.abs(v);
   if(a>=1e7) return '₹'+(v/1e7).toFixed(2)+' Cr';
   if(a>=1e5) return '₹'+(v/1e5).toFixed(1)+' L';
   return '₹'+inr.format(Math.round(v)); }
+/* securities and buckets read in their own currency; ₹-conversion only at portfolio level */
+function money(v,ccy){
+  if(ccy!=='USD') return cr(v);
+  const a=Math.abs(v);
+  if(a>=1e6) return '$'+(v/1e6).toFixed(2)+'M';
+  if(a>=1e4) return '$'+(v/1e3).toFixed(1)+'k';
+  return '$'+usd.format(Math.round(v)); }
 const full = v => '₹'+inr.format(Math.round(v));
 const pct = v => (v>=0?'+':'')+(v*100).toFixed(1)+'%';
 const sign = v => (v>=0?'+':'−');
@@ -454,27 +470,39 @@ function dayChange(arr){
   const prev=arr[i-1]||0, curv=arr[NPTS-1];
   return prev? (curv/prev-1):0;
 }
+function bucketCcy(){ return bucket? (D.bucketCcy?.[bucket]||'INR') : 'INR'; }
 function renderHero(){
-  const s=seriesFor(); const v=s[NPTS-1];
-  $('heroLabel').textContent = bucket? bucket+' · portfolio' : 'Portfolio';
-  $('heroVal').textContent = cr(v);
+  const s=seriesFor(); const v=s[NPTS-1]; const ccy=bucketCcy();
+  $('heroLabel').textContent = bucket? bucket+(ccy==='USD'?' · USD':'') : 'Portfolio';
+  $('heroVal').textContent = money(v,ccy);
   const dc=dayChange(s);
   const st=bucket? D.stats[bucket]:OV;
   $('heroChips').innerHTML='';
-  const c1=document.createElement('span'); dchip(c1,dc, sign(dc)+cr(Math.abs(v-v/(1+dc)))+' · '+pct(Math.abs(dc)).slice(1)+' today');
+  const c1=document.createElement('span'); dchip(c1,dc, sign(dc)+money(Math.abs(v-v/(1+dc)),ccy)+' · '+pct(Math.abs(dc)).slice(1)+' today');
   c1.classList.add('m');
   const c2=document.createElement('span'); c2.className='chip flat m'; c2.style.marginLeft='6px';
   c2.textContent='XIRR '+pct(st.xirr);
   $('heroChips').append(c1,c2);
-  $('heroSub').textContent=full(v)+' · invested '+cr(st.invested)+' · as of '+fdate(D.asOf);
+  $('heroSub').textContent=(ccy==='USD'? '$'+usd.format(Math.round(v)) : full(v))
+    +' · invested '+money(st.invested,ccy)+' · as of '+fdate(D.asOf);
+}
+/* tiny sparkline (Apple-Stocks style): last ~30 daily points, no axes */
+function sparkSvg(arr,color,w=52,h=18){
+  const tail=arr.slice(-30).filter(v=>v!=null);
+  if(tail.length<2) return '';
+  const lo=Math.min(...tail), hi=Math.max(...tail), sp=hi-lo||1;
+  const pts=tail.map((v,i)=>`${(i/(tail.length-1)*w).toFixed(1)},${(h-2-(v-lo)/sp*(h-4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 function renderTiles(){
   const t=$('tiles'); t.innerHTML='';
   for(const b of ['India','US','Gold','Crypto']){
+    const ccy=D.bucketCcy?.[b]||'INR';
     const v=D.buckets[b][NPTS-1], dc=dayChange(D.buckets[b]);
     const el=document.createElement('div');
     el.className='tile'+(bucket===b?' on':''); el.style.setProperty('--tc',BC[b]);
-    el.innerHTML=`<div class="n"><i></i>${b}</div><div class="val m num">${cr(v)}</div>
+    el.innerHTML=`<div class="n"><i></i>${b}</div><div class="val m num">${money(v,ccy)}</div>
+      <div class="tsp">${sparkSvg(D.buckets[b],BC[b])}</div>
       <div class="d num ${dc>0.0005?'up':dc<-0.0005?'down':'flat'}">${pct(dc)}</div>`;
     el.onclick=()=>{ bucket = bucket===b? null:b; renderAll(); };
     t.appendChild(el);
@@ -490,8 +518,8 @@ function renderChart(){
   const svg=$('perf'); svg.innerHTML='';
   const W=353,H=196,padT=8,padB=20,padL=2,padR=46;
   const i0=startIdx(), s=seriesFor();
-  const xs=[],ys=[[ ]]; // portfolio
-  const showB=compare && !bucket, showI=compare;
+  // invested/benchmark overlays are ₹ series — portfolio view only
+  const showB=compare && !bucket, showI=compare && !bucket;
   const inv=D.invested, ben=D.bench;
   let lo=Infinity,hi=-Infinity;
   const rows=[s]; if(showB) rows.push(ben); if(showI) rows.push(inv);
@@ -505,7 +533,7 @@ function renderChart(){
     const gv=lo+(hi-lo)*(g+1)/4, y=Y(gv);
     svg.appendChild(el('line',{x1:padL,x2:W-padR+4,y1:y,y2:y,stroke:'#1B2420','stroke-width':1}));
     const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT});
-    t.textContent=cr(gv).replace('₹',''); t.classList.add('m'); svg.appendChild(t);
+    t.textContent=money(gv,bucketCcy()).replace('₹',''); t.classList.add('m'); svg.appendChild(t);
   }
   const path=(arr,skipZero)=>{
     let d=''; for(let i=i0;i<NPTS;i++){ const v=arr[i]; if(!v&&skipZero){continue;}
@@ -556,17 +584,17 @@ function renderChart(){
     : `<span><i style="border-color:${bucket?BC[bucket]:BRAND}"></i>${bucket? bucket+' value':'Portfolio value'}</span>`;
 }
 function renderReadout(){
-  const s=seriesFor(); const i0=startIdx();
+  const s=seriesFor(); const i0=startIdx(); const ccy=bucketCcy();
   const i=scrub??NPTS-1;
   const v=s[i]||0, v0=s[i0]||s.find(x=>x)||1;
-  $('roVal').textContent=cr(v);
+  $('roVal').textContent=money(v,ccy);
   // added money isn't growth: report the range's contributions separately and
   // base the % on gain over (start value + net added)
   const added=(D.invested[i]||0)-(D.invested[i0]||0);
   const gain=v-v0-(bucket?0:added);
   const base=v0+(bucket?0:Math.max(0,added));
   const gp=base? gain/base:0;
-  dchip($('roChg'),gp, `${sign(gain)}${cr(Math.abs(gain))} · ${pct(Math.abs(gp)).slice(1)}`);
+  dchip($('roChg'),gp, `${sign(gain)}${money(Math.abs(gain),ccy)} · ${pct(Math.abs(gp)).slice(1)}`);
   $('roChg').classList.add('m');
   const addTxt=(!bucket && added>1000)? ' · added '+cr(added):'';
   $('roDate').textContent= scrub!=null? fdate(CAL[i]) : range+addTxt;
@@ -625,7 +653,11 @@ function renderAlloc(){
     const p=r.value/total;
     d.style.cssText=`left:${r.x+1}px;top:${r.y+1}px;width:${r.w-2}px;height:${r.h-2}px;
       background:color-mix(in srgb, ${r.color} ${Math.round(26+p*60)}%, #131A16)`;
-    if(r.w>54 && r.h>30) d.innerHTML=`<div class="tl">${r.label}</div><div class="tp m num">${(p*100).toFixed(p<0.1?1:0)}%</div>`;
+    if(r.w>54 && r.h>30){
+      const one=r.items && r.items.length===1;
+      const amt=r.h>56? `<span style="opacity:.75; font-weight:600"> · ${one? money(r.items[0].value,r.items[0].currency) : (BC[r.key]&&D.stats[r.key]? money(D.stats[r.key].value,D.stats[r.key].currency):'')}</span>`:'';
+      d.innerHTML=`<div class="tl">${r.label}</div><div class="tp m num">${(p*100).toFixed(p<0.1?1:0)}%${amt}</div>`;
+    }
     d.onclick=()=>{
       if(allocMode!=='holding' && !drill){ drill={key:r.key, items:r.items}; renderAlloc(); }
       else if(r.items && r.items.length===1){ openHolding(r.items[0].isin); }
@@ -635,13 +667,19 @@ function renderAlloc(){
   $('crumb').innerHTML = drill? `<b id="crumbBack">‹ All</b> · ${drill.key}` :
      (allocMode==='holding'?'Top holdings by value · tap to open':'Tap a block to drill in');
   const cb=$('crumbBack'); if(cb) cb.onclick=()=>{ drill=null; renderAlloc(); };
-  // mirror list
+  // mirror list — % compares slices (₹-weighted); amounts read native
   const list=$('alist'); list.innerHTML='';
   for(const n of nodes.slice(0,6)){
     const p=(n.value/total*100);
+    let amt;
+    if(n.items && n.items.length===1) amt=money(n.items[0].value,n.items[0].currency);
+    else if(BC[n.key]) amt=money(D.stats[n.key].value,D.stats[n.key].currency);
+    else { const ccy=n.items?.[0]?.currency;   // sector groups are single-market
+      amt=(n.items&&n.items.every(h=>h.currency===ccy))
+        ? money(n.items.reduce((a,h)=>a+h.value,0),ccy) : cr(n.value); }
     const row=document.createElement('div'); row.className='arow';
     row.innerHTML=`<i style="background:${n.color}"></i><span class="an">${n.label}</span>
-      <span class="ap num">${p.toFixed(1)}%</span><span class="av m num">${cr(n.value)}</span>`;
+      <span class="ap num">${p.toFixed(1)}%</span><span class="av m num">${amt}</span>`;
     list.appendChild(row);
   }
   $('allocTotal').textContent=cr(total)+' total';
@@ -655,8 +693,10 @@ document.querySelectorAll('#allocSeg button').forEach(b=>{
 function renderXirr(){
   const gain=OV.value-OV.benchValue;
   $('xirrHead').innerHTML=`Same cashflows in the indexes would be <b class="m num" style="color:var(--ink)">${cr(OV.benchValue)}</b> —
-    you're <b class="m num" style="color:${gain>=0?'var(--good)':'var(--bad)'}">${cr(Math.abs(gain))} ${gain>=0?'ahead':'behind'}</b>.`;
-  const rows=[['Overall',OV,null,BRAND], ...['India','US','Gold','Crypto'].map(b=>[b,D.stats[b],D.stats[b].benchmark,BC[b]])];
+    you're <b class="m num" style="color:${gain>=0?'var(--good)':'var(--bad)'}">${cr(Math.abs(gain))} ${gain>=0?'ahead':'behind'}</b>.
+    <span style="font-size:11px">Buckets compare in their own currency and market.</span>`;
+  const rows=[['Overall',OV,null,BRAND], ...['India','US','Gold','Crypto'].map(b=>[b,D.stats[b],
+      D.stats[b].benchmark+(D.stats[b].currency==='USD'?' · $':' · ₹'),BC[b]])];
   const vals=rows.flatMap(([,s])=>[s.xirr||0,s.benchXirr||0]);
   const maxV=Math.max(...vals,0.01), minV=Math.min(...vals,0);
   const zero=(-minV)/(maxV-minV)*100;   // shared zero anchor so negatives read
@@ -687,16 +727,17 @@ function renderAlerts(){
     const row=document.createElement('div'); row.className='alert';
     const d=new Date(m.date+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
     row.innerHTML=`<span class="dt">${d}</span><span class="nm">${m.name}</span>
-      <span class="av m num">${cr(m.valueInr)} position</span>
+      <span class="av m num">${money(m.value,m.currency)} position</span>
       <span class="chip ${m.pct>0?'up':'down'} num">${m.pct>0?'▲':'▼'} ${Math.abs(m.pct).toFixed(1)}%</span>`;
     list.appendChild(row);
   }
   $('acount').textContent=D.moversCount||D.movers.length;
   const m1=D.movers[0], m2=D.movers.find(m=>m.pct<0)||D.movers[1];
+  const impact=m=>money(Math.abs(m.value*m.pct/100),m.currency);
   $('nf1t').textContent=`${m1.name} ${m1.pct>0?'▲':'▼'} ${Math.abs(m1.pct).toFixed(1)}% today`;
-  $('nf1b').textContent=`Your ${cr(m1.valueInr)} position moved ${sign(m1.pct)}${cr(Math.abs(m1.valueInr*m1.pct/100))}. Threshold ±4%.`;
+  $('nf1b').textContent=`Your ${money(m1.value,m1.currency)} position moved ${sign(m1.pct)}${impact(m1)}. Threshold ±4%.`;
   $('nf2t').textContent=`${m2.name} ${m2.pct>0?'▲':'▼'} ${Math.abs(m2.pct).toFixed(1)}% `;
-  $('nf2b').textContent=`Your ${cr(m2.valueInr)} position moved ${sign(m2.pct)}${cr(Math.abs(m2.valueInr*m2.pct/100))}. Threshold ±4%.`;
+  $('nf2b').textContent=`Your ${money(m2.value,m2.currency)} position moved ${sign(m2.pct)}${impact(m2)}. Threshold ±4%.`;
 }
 
 /* ---------- holdings list ---------- */
@@ -706,14 +747,16 @@ function renderHoldings(){
   for(const b of ['US','Gold','India','Crypto']){
     const hs=D.holdings.filter(h=>h.bucket===b); if(!hs.length) continue;
     const g=document.createElement('div'); g.className='grp';
-    g.innerHTML=`<i style="background:${BC[b]}"></i>${b}<span class="gv m">${cr(hs.reduce((a,h)=>a+h.valueInr,0))}</span>`;
+    g.innerHTML=`<i style="background:${BC[b]}"></i>${b}<span class="gv m">${money(D.stats[b].value,D.stats[b].currency)}</span>`;
     wrap.appendChild(g);
     for(const h of hs){
       const r=document.createElement('div'); r.className='hrow';
+      const dc=h.dayPct;
       r.innerHTML=`<div class="hl"><div class="hn">${h.name}</div>
           <div class="hs">${h.qty%1?h.qty.toFixed(2):h.qty} ${h.type==='Gold'?'g':'units'} · ${h.sector}</div></div>
-        <div class="hr"><div class="hv m num">${cr(h.valueInr)}</div>
-          <div class="hd num"><span class="d ${h.dayPct>0.05?'up':h.dayPct<-0.05?'down':'flat'}">${h.dayPct>0?'+':''}${h.dayPct.toFixed(1)}%</span><span style="color:var(--muted)"> · XIRR ${h.xirr!=null?(h.xirr*100).toFixed(0)+'%':'—'}</span></div></div>`;
+        <div class="hspark">${sparkSvg(h.series.c, dc>=0? '#2E9B6E':'#C25B4E', 56, 20)}</div>
+        <div class="hr"><div class="hv m num">${money(h.value,h.currency)}</div>
+          <div class="hd num"><span class="d ${dc>0.05?'up':dc<-0.05?'down':'flat'}">${dc>0?'+':''}${dc.toFixed(1)}%</span><span style="color:var(--muted)"> · XIRR ${h.xirr!=null?(h.xirr*100).toFixed(0)+'%':'—'}</span></div></div>`;
       r.onclick=()=>openHolding(h.isin);
       wrap.appendChild(r);
     }
@@ -731,25 +774,27 @@ function renderDetail(h){
   const st=D.stats[h.bucket];
   const wrap=$('tabB');
   const price=h.series.c[h.series.c.length-1];
+  const csym=h.currency==='USD'?'$':'₹';
+  const fnum=h.currency==='USD'?usd:inr;
   wrap.innerHTML=`
     <div class="backrow"><span class="bk">‹</span><span class="t">${h.name}</span><span class="tick">${h.yahoo}</span></div>
     <div class="hero" style="margin-top:8px">
-      <div class="vrow"><div class="v m num" style="font-size:28px">${cr(h.valueInr)}</div></div>
+      <div class="vrow"><div class="v m num" style="font-size:28px">${money(h.value,h.currency)}</div></div>
       <div style="margin-top:5px"><span class="chip ${h.dayPct>0?'up':h.dayPct<0?'down':'flat'} num">${h.dayPct>0?'+':''}${h.dayPct}% today</span></div>
-      <div class="sub m">${h.qty%1?h.qty.toFixed(3):h.qty} ${h.type==='Gold'?'grams':'units'} · ₹${inr.format(Math.round(price))} ${h.type==='Gold'?'/ gram':'each'}</div>
+      <div class="sub m">${h.qty%1?h.qty.toFixed(3):h.qty} ${h.type==='Gold'?'grams':'units'} · ${csym}${fnum.format(Math.round(price))} ${h.type==='Gold'?'/ gram':'each'}</div>
     </div>
     <div class="card">
       <div class="chips" id="dranges"></div>
       <svg id="dchart" width="100%" height="170" viewBox="0 0 321 170" preserveAspectRatio="none"></svg>
-      <div class="legend"><span><i style="border-color:${BC[h.bucket]}"></i>Price (₹)</span>
+      <div class="legend"><span><i style="border-color:${BC[h.bucket]}"></i>Price (${csym})</span>
         <span>▲ your buys</span></div>
     </div>
     <div class="statgrid">
-      <div class="sg"><div class="k">Invested</div><div class="v m num">${cr(h.investedInr)}</div></div>
-      <div class="sg"><div class="k">Value</div><div class="v m num">${cr(h.valueInr)}</div></div>
-      <div class="sg"><div class="k">Return</div><div class="v m num" style="color:${h.valueInr>=h.investedInr?'var(--good)':'var(--bad)'}">${pct(h.valueInr/h.investedInr-1)}</div></div>
+      <div class="sg"><div class="k">Invested</div><div class="v m num">${money(h.invested,h.currency)}</div></div>
+      <div class="sg"><div class="k">Value</div><div class="v m num">${money(h.value,h.currency)}</div></div>
+      <div class="sg"><div class="k">Return</div><div class="v m num" style="color:${h.value>=h.invested?'var(--good)':'var(--bad)'}">${pct(h.value/h.invested-1)}</div></div>
       <div class="sg"><div class="k">XIRR</div><div class="v m num">${h.xirr!=null?pct(h.xirr):'—'}</div></div>
-      <div class="sg"><div class="k">${st.benchmark}</div><div class="v m num" style="color:var(--muted)">${pct(st.benchXirr)}</div></div>
+      <div class="sg"><div class="k">${st.benchmark} · ${csym}</div><div class="v m num" style="color:var(--muted)">${pct(st.benchXirr)}</div></div>
       <div class="sg"><div class="k">Alert at</div><div class="v">±4% / day</div></div>
     </div>
     <div class="card">
@@ -774,7 +819,7 @@ function renderDetail(h){
   const X=i=>2+(W-2-padR)*i/Math.max(1,cs.length-1), Y=v=>padT+(H-padT-padB)*(1-(v-lo)/(hi-lo));
   for(let g=0;g<3;g++){ const gv=lo+(hi-lo)*(g+1)/4, y=Y(gv);
     svg.appendChild(el('line',{x1:2,x2:W-padR+4,y1:y,y2:y,stroke:'#1B2420'}));
-    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT}); t.textContent=inr.format(Math.round(gv)); t.classList.add('m'); svg.appendChild(t); }
+    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT}); t.textContent=fnum.format(Math.round(gv)); t.classList.add('m'); svg.appendChild(t); }
   let d=''; cs.forEach((v,i)=>{ if(v) d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
   svg.appendChild(el('path',{d,fill:'none',stroke:BC[h.bucket],'stroke-width':2.2,'stroke-linejoin':'round'}));
   // trade markers
@@ -787,12 +832,11 @@ function renderDetail(h){
   }
   // trades list (latest first)
   const tl=$('dtrades');
-  const sym=h.currency==='USD'?'$':'₹';   // trades store the broker's native price
   [...h.trades].reverse().slice(0,8).forEach(t=>{
     const row=document.createElement('div'); row.className='trow';
     row.innerHTML=`<span class="td">${fdate(t.date).replace(' 20',' ’')}</span>
       <span class="side ${t.side==='buy'?'b':'s'}">${t.side.toUpperCase()}</span>
-      <span class="tq m num">${t.qty%1?t.qty.toFixed(3):t.qty} @ ${sym}${inr.format(t.price)}</span>`;
+      <span class="tq m num">${t.qty%1?t.qty.toFixed(3):t.qty} @ ${csym}${fnum.format(t.price)}</span>`;
     tl.appendChild(row);
   });
   if(h.trades.length>8){ const more=document.createElement('div'); more.className='trow'; more.style.color='var(--muted)';

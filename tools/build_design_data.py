@@ -88,10 +88,20 @@ def trade_cash_inr(t, k):
 day_idx = {day: k for k, day in enumerate(CAL)}
 
 # ---- daily holdings, value, invested per bucket ----
+# Currency policy: INR exists ONLY at the whole-portfolio level. Buckets and
+# securities stay in their own currency (US/Crypto: USD; India/Gold: INR).
 BUCKETS = ["India", "US", "Gold", "Crypto"]
+BUCKET_CCY = {"India": "INR", "US": "USD", "Gold": "INR", "Crypto": "USD"}
 qty = {isin: [0.0] * N for isin in {t["isin"] for t in trades}}
-invested = {b: [0.0] * N for b in BUCKETS}
+invested = {b: [0.0] * N for b in BUCKETS}          # INR (portfolio overlay)
+invested_native = {b: [0.0] * N for b in BUCKETS}   # bucket currency
 bench_units = {"^NSEI": [0.0] * N, "^GSPC": [0.0] * N}
+
+
+def trade_cash_native(t):
+    gross = t["qty"] * t["price"] + t.get("fee", 0)
+    return gross if t["side"] == "buy" else -gross
+
 
 for t in trades:
     k = day_idx[t["date"]]
@@ -100,17 +110,37 @@ for t in trades:
     b = bucket_of(t["isin"])
     cash = trade_cash_inr(t, k)
     invested[b][k] += cash
-    # benchmark sim: the same INR would have bought index units that day
-    bsym = "^NSEI" if b in ("India", "Gold") else "^GSPC"
-    ref = PX[bsym][k] * (FX[k] if bsym == "^GSPC" else 1)
-    if ref:
-        bench_units[bsym][k] += cash / ref
+    invested_native[b][k] += trade_cash_native(t)
+    # benchmark sim in the bucket's own market and currency: INR flows buy
+    # ^NSEI at INR, USD flows buy ^GSPC at USD — no FX in the comparison
+    if BUCKET_CCY[b] == "INR":
+        ref = PX["^NSEI"][k]
+        if ref:
+            bench_units["^NSEI"][k] += cash / ref
+    else:
+        ref = PX["^GSPC"][k]
+        if ref:
+            bench_units["^GSPC"][k] += trade_cash_native(t) / ref
 
-for arr in list(qty.values()) + list(invested.values()) + list(bench_units.values()):
+for arr in (list(qty.values()) + list(invested.values())
+            + list(invested_native.values()) + list(bench_units.values())):
     for k in range(1, N):
         arr[k] += arr[k - 1]
 
-value = {b: [0.0] * N for b in BUCKETS}
+
+def px_native(isin, k):
+    """Close in the instrument's own display currency (gold: INR/gram)."""
+    i = inst[isin]
+    p = PX[i["yahoo"]][k]
+    if p is None:
+        return None
+    if isin == "GOLD":
+        return p * (FX[k] or 0) / OZ_TO_GRAM
+    return p
+
+
+value = {b: [0.0] * N for b in BUCKETS}          # INR (portfolio total)
+value_native = {b: [0.0] * N for b in BUCKETS}   # bucket currency (tiles/charts)
 for isin, qarr in qty.items():
     b = bucket_of(isin)
     for k in range(N):
@@ -118,9 +148,13 @@ for isin, qarr in qty.items():
             p = px_inr(isin, k)
             if p:
                 value[b][k] += qarr[k] * p
+            pn = px_native(isin, k)
+            if pn:
+                value_native[b][k] += qarr[k] * pn
 
 total = [sum(value[b][k] for b in BUCKETS) for k in range(N)]
 total_inv = [sum(invested[b][k] for b in BUCKETS) for k in range(N)]
+# whole-portfolio benchmark line is the one place FX conversion applies
 bench_val = [
     bench_units["^NSEI"][k] * (PX["^NSEI"][k] or 0)
     + bench_units["^GSPC"][k] * (PX["^GSPC"][k] or 0) * (FX[k] or 0)
@@ -152,41 +186,43 @@ def xirr(flows, terminal_value, terminal_day):
 
 
 last = N - 1
-flows_all, flows_b = [], {b: [] for b in BUCKETS}
-flows_bench = {b: [] for b in BUCKETS}
+flows_all = []                                   # INR — whole-portfolio only
+flows_b = {b: [] for b in BUCKETS}               # bucket currency
 for t in trades:
     k = day_idx[t["date"]]
-    cash = trade_cash_inr(t, k)
     b = bucket_of(t["isin"])
-    flows_all.append((k, cash))
-    flows_b[b].append((k, cash))
+    flows_all.append((k, trade_cash_inr(t, k)))
+    flows_b[b].append((k, trade_cash_native(t)))
 
-# Per-bucket benchmark sim: accumulate index units bought by that bucket's cashflows
+# Per-bucket benchmark sim, in the bucket's own currency — same cashflows
+# buying its market index (^NSEI in INR, ^GSPC in USD)
 bench_bucket_val = {}
 for b in BUCKETS:
-    bsym = "^NSEI" if b in ("India", "Gold") else "^GSPC"
+    bsym = "^NSEI" if BUCKET_CCY[b] == "INR" else "^GSPC"
     units = 0.0
     vals = [0.0] * N
     fl = sorted(flows_b[b])
     fi = 0
     for k in range(N):
         while fi < len(fl) and fl[fi][0] == k:
-            ref = PX[bsym][k] * (FX[k] if bsym == "^GSPC" else 1)
+            ref = PX[bsym][k]
             if ref:
                 units += fl[fi][1] / ref
             fi += 1
-        vals[k] = units * (PX[bsym][k] or 0) * (FX[k] if bsym == "^GSPC" else 1)
+        vals[k] = units * (PX[bsym][k] or 0)
     bench_bucket_val[b] = vals
 
 stats = {}
 for b in BUCKETS:
-    cur, inv = value[b][last], invested[b][last]
+    cur, inv = value_native[b][last], invested_native[b][last]
     stats[b] = {
-        "value": round(cur), "invested": round(inv),
-        "xirr": xirr(flows_b[b], cur, last),
-        "benchXirr": xirr(flows_b[b], bench_bucket_val[b][last], last),
-        "benchValue": round(bench_bucket_val[b][last]),
-        "benchmark": "Nifty 50" if b in ("India", "Gold") else "S&P 500",
+        "value": round(cur, 2), "invested": round(inv, 2),
+        "valueInr": round(value[b][last]),
+        "currency": BUCKET_CCY[b],
+        "xirr": xirr(sorted(flows_b[b]), cur, last),
+        "benchXirr": xirr(sorted(flows_b[b]), bench_bucket_val[b][last], last),
+        "benchValue": round(bench_bucket_val[b][last], 2),
+        "benchmark": "Nifty 50" if BUCKET_CCY[b] == "INR" else "S&P 500",
     }
 overall = {
     "value": round(total[last]), "invested": round(total_inv[last]),
@@ -202,31 +238,44 @@ for isin, qarr in qty.items():
     if q <= 1e-9:
         continue
     p = px_inr(isin, last)
-    prev = px_inr(isin, last - 1)
     cur = q * (p or 0)
     fl = [(day_idx[t["date"]], trade_cash_inr(t, day_idx[t["date"]]))
           for t in trades if t["isin"] == isin]
     i = inst[isin]
+    # native-currency view: securities read in their own currency, and XIRR
+    # on native cashflows shows the position's performance without FX drift
+    pn = px_native(isin, last)
+    prev_n = px_native(isin, last - 1)
+    cur_native = q * (pn or 0)
+    fl_native = []
+    for t in trades:
+        if t["isin"] != isin:
+            continue
+        gross = t["qty"] * t["price"] + t.get("fee", 0)
+        fl_native.append((day_idx[t["date"]], gross if t["side"] == "buy" else -gross))
+    fl_native.sort()
     # slim price history for the holding-detail chart: weekly points, daily
-    # for the last 400 days, INR values, starting a month before first trade
+    # for the last 400 days, native currency, starting a month before first trade
     first_k = min(k for k, _ in fl)
     hk = [k for k in range(max(0, first_k - 30), N)
           if k >= N - 400 or k % 7 == 0]
     hseries = {
         "d": [CAL[k] for k in hk],
-        "c": [round(px_inr(isin, k) or 0, 2) for k in hk],
+        "c": [round(px_native(isin, k) or 0, 2) for k in hk],
     }
     tmarks = [{"date": t["date"], "side": t["side"], "qty": t["qty"],
                "price": round(t["price"], 2)}
               for t in trades if t["isin"] == isin]
     holdings.append({
         "isin": isin, "name": i["name"], "yahoo": i["yahoo"], "type": i["type"],
-        "currency": i["currency"],
+        "currency": "INR" if isin == "GOLD" else i["currency"],
         "bucket": bucket_of(isin), "sector": sectors.get(i["yahoo"], "Other"),
         "qty": round(q, 4), "valueInr": round(cur),
-        "dayPct": round((p / prev - 1) * 100, 2) if p and prev else 0,
+        "value": round(cur_native, 2), "invested": round(sum(c for _, c in fl_native), 2),
+        "price": round(pn or 0, 2),
+        "dayPct": round((pn / prev_n - 1) * 100, 2) if pn and prev_n else 0,
         "investedInr": round(sum(c for _, c in fl)),
-        "xirr": xirr(sorted(fl), cur, last),
+        "xirr": xirr(fl_native, cur_native, last),
         "series": hseries, "trades": tmarks,
     })
 holdings.sort(key=lambda h: -h["valueInr"])
@@ -241,7 +290,8 @@ for h in holdings:
             pct = (p1 / p0 - 1) * 100
             if abs(pct) >= 4.0:
                 movers.append({"date": CAL[k], "isin": h["isin"], "name": h["name"],
-                               "pct": round(pct, 2), "valueInr": h["valueInr"]})
+                               "pct": round(pct, 2),
+                               "value": h["value"], "currency": h["currency"]})
 movers.sort(key=lambda m: m["date"], reverse=True)
 
 # ---- emit (weekly points before the last 400 days to keep size sane) ----
@@ -258,7 +308,9 @@ out = {
     "total": [round(total[k]) for k in keep],
     "invested": [round(total_inv[k]) for k in keep],
     "bench": [round(bench_val[k]) for k in keep],
-    "buckets": {b: [round(value[b][k]) for k in keep] for b in BUCKETS},
+    # bucket series in their own currency; INR appears only in `total`
+    "buckets": {b: [round(value_native[b][k], 2) for k in keep] for b in BUCKETS},
+    "bucketCcy": BUCKET_CCY,
     "stats": {"overall": overall, **stats},
     "holdings": holdings,
     "movers": movers[:40],
@@ -271,13 +323,13 @@ path.write_text(json.dumps(out, separators=(",", ":")))
     "window.PORTFOLIO_DATA=" + json.dumps(out, separators=(",", ":")) + ";"
 )
 
-fmt = lambda v: f"₹{v:,.0f}"
 print(f"as of {CAL[last]}   ({path.stat().st_size//1024} KB)")
-print(f"TOTAL   {fmt(overall['value'])}  invested {fmt(overall['invested'])}  "
+print(f"TOTAL   ₹{overall['value']:,.0f}  invested ₹{overall['invested']:,.0f}  "
       f"XIRR {overall['xirr']*100:.1f}%  benchXIRR {overall['benchXirr']*100:.1f}%")
 for b in BUCKETS:
     s = stats[b]
+    sym = "₹" if s["currency"] == "INR" else "$"
     x = f"{s['xirr']*100:.1f}%" if s["xirr"] is not None else "n/a"
     bx = f"{s['benchXirr']*100:.1f}%" if s["benchXirr"] is not None else "n/a"
-    print(f"{b:>6}  {fmt(s['value'])}  invested {fmt(s['invested'])}  XIRR {x}  vs {s['benchmark']} {bx}")
+    print(f"{b:>6}  {sym}{s['value']:,.0f}  invested {sym}{s['invested']:,.0f}  XIRR {x}  vs {s['benchmark']} ({s['currency']}) {bx}")
 print(f"holdings: {len(holdings)}, movers(90d,>=4%): {len(movers)}")
