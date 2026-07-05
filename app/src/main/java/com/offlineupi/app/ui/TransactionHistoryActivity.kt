@@ -78,12 +78,23 @@ class TransactionHistoryActivity : AppCompatActivity() {
             val txn = items[position]
 
             // Status icon
-            if (txn.status == "success") {
-                holder.tvStatusIcon.text = "\u2713"
-                holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
-            } else {
-                holder.tvStatusIcon.text = "!"
-                holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+            when (txn.status) {
+                "success" -> {
+                    holder.tvStatusIcon.text = "\u2713"
+                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
+                }
+                "reversed" -> {
+                    holder.tvStatusIcon.text = "\u21a9"
+                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                }
+                "pending" -> {
+                    holder.tvStatusIcon.text = "\u2026"
+                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                }
+                else -> {
+                    holder.tvStatusIcon.text = "!"
+                    holder.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                }
             }
 
             // Payee

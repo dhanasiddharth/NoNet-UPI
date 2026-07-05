@@ -14,8 +14,10 @@ data class Transaction(
     val balance: String?,
     val remarks: String?,
     val timestamp: Long = System.currentTimeMillis(),
-    val status: String, // "success" or "failure"
-    val rawSmsText: String?
+    val status: String, // "success", "failure", "reversed", or "pending"
+    val rawSmsText: String?,
+    /** Reference number of the refund when the payment was reversed. */
+    val reversalRrn: String? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -30,6 +32,7 @@ data class Transaction(
         put("timestamp", timestamp)
         put("status", status)
         put("rawSmsText", rawSmsText ?: JSONObject.NULL)
+        put("reversalRrn", reversalRrn ?: JSONObject.NULL)
     }
 
     companion object {
@@ -45,7 +48,8 @@ data class Transaction(
             remarks = json.nullString("remarks"),
             timestamp = json.getLong("timestamp"),
             status = json.getString("status"),
-            rawSmsText = json.nullString("rawSmsText")
+            rawSmsText = json.nullString("rawSmsText"),
+            reversalRrn = json.nullString("reversalRrn")
         )
 
         private fun JSONObject.nullString(key: String): String? =

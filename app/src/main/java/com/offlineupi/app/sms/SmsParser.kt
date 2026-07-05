@@ -15,7 +15,9 @@ object SmsParser {
         val accountNumber: String?,
         val dateTime: String?,
         val rrn: String?,
-        val balance: String?
+        val balance: String?,
+        /** True when the SMS reports a reversal/refund — the payment failed. */
+        val isReversal: Boolean = false
     )
 
     fun parseUpiSms(body: String): ParsedSms? {
@@ -26,6 +28,10 @@ object SmsParser {
         if (!lower.contains("debit") && !lower.contains("credit")) return null
 
         val type = if (lower.contains("debit")) "debit" else "credit"
+
+        // A refund/reversal credit means the payment did NOT go through.
+        val isReversal = lower.contains("reversal") || lower.contains("reversed") ||
+                lower.contains("/revr/") || lower.contains("refund")
 
         // Amount: Rs.590.00 or INR 590.00
         val amountPattern = Regex(
@@ -46,12 +52,14 @@ object SmsParser {
         val dtPattern = Regex("""(\d{2}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})""")
         val dateTime = dtPattern.find(body)?.groupValues?.get(1)
 
-        // RRN: 065559358417
-        val rrnPattern = Regex(
-            """(?:rrn|ref(?:erence)?)\s*:?\s*(\d{6,})""",
+        // RRN / UPI reference. Handles "RRN:065559358417", "Ref no. 045232826670",
+        // "UPI Ref no.065…", and "/REVR/045232826670/NAME".
+        val rrn = Regex(
+            """(?:rrn|ref(?:erence)?(?:\s*no)?)\s*\.?\s*:?\s*(\d{9,})""",
             RegexOption.IGNORE_CASE
-        )
-        val rrn = rrnPattern.find(body)?.groupValues?.get(1)
+        ).find(body)?.groupValues?.get(1)
+            ?: Regex("""/(?:revr|upi)/(\d{9,})/""", RegexOption.IGNORE_CASE)
+                .find(body)?.groupValues?.get(1)
 
         // Balance after transaction: Bal:Rs.113846.96
         val balPattern = Regex(
@@ -60,6 +68,6 @@ object SmsParser {
         )
         val balance = balPattern.find(body)?.groupValues?.get(1)?.replace(",", "")
 
-        return ParsedSms(type, amount, accountNumber, dateTime, rrn, balance)
+        return ParsedSms(type, amount, accountNumber, dateTime, rrn, balance, isReversal)
     }
 }

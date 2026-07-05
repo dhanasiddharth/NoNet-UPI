@@ -51,6 +51,7 @@ class UssdAccessibilityService : AccessibilityService() {
         const val STEP_PIN_PROMPT = 6
         const val STEP_RESULT_SUCCESS = 7
         const val STEP_RESULT_FAILURE = 8
+        const val STEP_RESULT_UNKNOWN = 9
 
         // Phone payment flow extra steps
         const val STEP_MOBILE_SELECTED = 10
@@ -64,6 +65,9 @@ class UssdAccessibilityService : AccessibilityService() {
         const val STEP_BALANCE_RESULT = 103
         const val STEP_BALANCE_FAILURE = 104
 
+        // Transaction status check (*99*6*1#) steps
+        const val STEP_TXN_STATUS_RESULT = 200
+
         const val EXTRA_RESULT_TEXT = "extra_result_text"
         const val EXTRA_MODE = "extra_mode"
         const val EXTRA_ACCOUNT_NUMBER = "extra_account_number"
@@ -73,6 +77,7 @@ class UssdAccessibilityService : AccessibilityService() {
         const val MODE_PAYMENT = "payment"
         const val MODE_PAYMENT_PHONE = "payment_phone"
         const val MODE_BALANCE = "balance"
+        const val MODE_TXN_STATUS = "txn_status"
 
         @Volatile var pendingVpa: String? = null
             private set
@@ -109,6 +114,15 @@ class UssdAccessibilityService : AccessibilityService() {
             resetTimeout()
         }
 
+        /** Arms the service to capture the *99*6*1# recent-transactions list. */
+        fun setPendingTxnStatusCheck() {
+            pendingVpa = null
+            pendingAmount = null
+            pendingRemarks = null
+            pendingMode = MODE_TXN_STATUS
+            resetTimeout()
+        }
+
         private fun resetTimeout() {
             timeoutRunnable?.let { handler.removeCallbacks(it) }
             timeoutRunnable = Runnable { clearPending() }
@@ -125,12 +139,14 @@ class UssdAccessibilityService : AccessibilityService() {
             timeoutRunnable = null
         }
 
-        fun hasPending(): Boolean = pendingVpa != null || pendingMode == MODE_BALANCE
+        fun hasPending(): Boolean =
+            pendingVpa != null || pendingMode == MODE_BALANCE || pendingMode == MODE_TXN_STATUS
     }
 
     private var lastRespondedMessage: String? = null
     private var awaitingResult = false
     private var awaitingBalanceResult = false
+    private var awaitingTxnStatusResult = false
 
     private val TAG = "UssdAutoFill"
 
@@ -138,7 +154,7 @@ class UssdAccessibilityService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: "null"
         Log.d(TAG, "Event: type=${event.eventType} pkg=$pkg hasPending=${hasPending()}")
 
-        if (!hasPending() && !awaitingResult && !awaitingBalanceResult) return
+        if (!hasPending() && !awaitingResult && !awaitingBalanceResult && !awaitingTxnStatusResult) return
 
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -208,6 +224,58 @@ class UssdAccessibilityService : AccessibilityService() {
 
         val lower = messageText.lowercase()
 
+        // Transient progress dialog ("USSD code running…") — not a network
+        // response. Consuming state here would swallow the real dialog that
+        // follows (observed: it was captured as the transaction result).
+        if (isProgressDialog(lower)) {
+            Log.d(TAG, "Progress dialog, ignoring")
+            return
+        }
+
+        // Transaction status check (*99*6*1#): the first dialog IS the recent
+        // transactions list (or an error). Capture it verbatim and end the
+        // session. Must run before the error/PIN heuristics — the list itself
+        // legitimately contains words like "failed".
+        if (pendingMode == MODE_TXN_STATUS && !isPinEntryPrompt(lower)) {
+            Log.d(TAG, "Txn status result: ${messageText.take(100)}")
+            broadcastStep(STEP_TXN_STATUS_RESULT, messageText.trim())
+            clearPending()
+            lastRespondedMessage = messageText
+            val dismissBtn = findButtonByText(root, "cancel") ?: findButtonByText(root, "ok")
+            dismissBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return
+        }
+
+        // Some banks gate the transaction list behind the UPI PIN.
+        if (pendingMode == MODE_TXN_STATUS) {
+            val storedPin = PinStore.pin
+            val editText = findNodeByClass(root, "android.widget.EditText")
+            if (!storedPin.isNullOrEmpty() && editText != null) {
+                val args = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, storedPin)
+                }
+                editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                findSendButton(root)?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                awaitingTxnStatusResult = true
+            } else {
+                // No PIN available — report an empty result so the UI falls back to SMS
+                broadcastStep(STEP_TXN_STATUS_RESULT, "")
+            }
+            clearPending()
+            lastRespondedMessage = messageText
+            return
+        }
+
+        // Awaiting the transaction list after a PIN prompt.
+        if (awaitingTxnStatusResult) {
+            broadcastStep(STEP_TXN_STATUS_RESULT, messageText.trim())
+            awaitingTxnStatusResult = false
+            lastRespondedMessage = messageText
+            val dismissBtn = findButtonByText(root, "cancel") ?: findButtonByText(root, "ok")
+            dismissBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return
+        }
+
         // Pre-PIN error dialog (e.g. "UPI ID is invalid") — surface failure and cancel session
         if (hasPending() && isPrePinErrorPrompt(lower)) {
             Log.d(TAG, "Pre-PIN error detected — cancelling USSD and reporting failure")
@@ -229,6 +297,11 @@ class UssdAccessibilityService : AccessibilityService() {
             val accountNumber = parseAccountNumber(messageText)
             val bankName = parseBankName(messageText)
             Log.d(TAG, "PIN prompt — account: $accountNumber, bank: $bankName")
+
+            // One-shot dials land here directly with "You are paying to <name>…"
+            if (capturedPayeeName == null) {
+                capturedPayeeName = parsePayeeName(messageText)
+            }
 
             // If we have a stored PIN, auto-fill it
             val storedPin = PinStore.pin
@@ -280,6 +353,24 @@ class UssdAccessibilityService : AccessibilityService() {
 
         // If awaiting payment result after PIN, capture the transaction result.
         if (awaitingResult) {
+            // Per the NUUP spec, PIN entry is followed by a menu where
+            // "1" saves the beneficiary and "2" completes the transaction
+            // and exits. Cancelling here would abort the payment.
+            val postPinEdit = findNodeByClass(root, "android.widget.EditText")
+            val isPostPinMenu = postPinEdit != null &&
+                Regex("""1[.)]""").containsMatchIn(messageText) &&
+                Regex("""2[.)]""").containsMatchIn(messageText) &&
+                (lower.contains("save") || lower.contains("beneficiary") || lower.contains("exit"))
+            if (isPostPinMenu) {
+                Log.d(TAG, "Post-PIN save-beneficiary menu — sending 2 to complete and exit")
+                val args = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "2")
+                }
+                postPinEdit?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                findSendButton(root)?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                lastRespondedMessage = messageText
+                return
+            }
             val resultStep = parseTransactionResult(lower)
             val resultText = messageText.trim()
             Log.d(TAG, "Transaction result: step=$resultStep text=${resultText.take(100)}")
@@ -360,9 +451,15 @@ class UssdAccessibilityService : AccessibilityService() {
             setPackage(packageName)
             putExtra(EXTRA_STEP, step)
             putExtra(EXTRA_STEP_LABEL, label)
-            putExtra(EXTRA_MODE, if (step >= 100) MODE_BALANCE else pendingMode)
+            putExtra(EXTRA_MODE, when {
+                step >= 200 -> MODE_TXN_STATUS
+                step >= 100 -> MODE_BALANCE
+                else -> pendingMode
+            })
             if (step == STEP_RESULT_SUCCESS || step == STEP_RESULT_FAILURE ||
-                step == STEP_BALANCE_RESULT || step == STEP_BALANCE_FAILURE) {
+                step == STEP_RESULT_UNKNOWN ||
+                step == STEP_BALANCE_RESULT || step == STEP_BALANCE_FAILURE ||
+                step == STEP_TXN_STATUS_RESULT) {
                 putExtra(EXTRA_RESULT_TEXT, label)
             }
             accountNumber?.let { putExtra(EXTRA_ACCOUNT_NUMBER, it) }
@@ -390,7 +487,9 @@ class UssdAccessibilityService : AccessibilityService() {
         for (keyword in failureKeywords) {
             if (message.contains(keyword)) return STEP_RESULT_FAILURE
         }
-        return STEP_RESULT_SUCCESS
+        // No keyword matched — don't guess. The *99*6*1# check or the bank
+        // SMS decides. (Was: default success, which recorded false positives.)
+        return STEP_RESULT_UNKNOWN
     }
 
     private fun isBalanceError(message: String): Boolean {
@@ -412,6 +511,14 @@ class UssdAccessibilityService : AccessibilityService() {
         STEP_NAME_CONFIRMED -> capturedPayeeName?.let { "Confirmed: $it" } ?: "Confirmed"
         STEP_BALANCE_SELECTED -> "Check Balance selected"
         else -> ""
+    }
+
+    private fun isProgressDialog(message: String): Boolean {
+        val t = message.trim()
+        return t.contains("ussd code running") ||
+                t.contains("please wait") ||
+                t.contains("running…") || t.contains("running...") ||
+                t == "processing" || t == "processing…"
     }
 
     private fun isPinEntryPrompt(message: String): Boolean {
@@ -656,6 +763,7 @@ class UssdAccessibilityService : AccessibilityService() {
         clearPending()
         awaitingResult = false
         awaitingBalanceResult = false
+        awaitingTxnStatusResult = false
         lastRespondedMessage = null
     }
 
@@ -664,6 +772,7 @@ class UssdAccessibilityService : AccessibilityService() {
         clearPending()
         awaitingResult = false
         awaitingBalanceResult = false
+        awaitingTxnStatusResult = false
         lastRespondedMessage = null
     }
 }

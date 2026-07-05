@@ -64,19 +64,55 @@ class TransactionReceiptActivity : AppCompatActivity() {
         if (txn == null) { finish(); return }
 
         // Status
-        if (txn.status == "success") {
-            binding.tvStatusIcon.text = "\u2713"
-            binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
-            binding.tvStatusText.text = "Payment Successful"
-            binding.tvStatusText.setTextColor(getColor(R.color.accent_green))
-            binding.btnCheckStatus.visibility = View.GONE
-        } else {
-            binding.tvStatusIcon.text = "!"
-            binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
-            binding.tvStatusText.text = "Payment Failed"
-            binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
-            binding.btnCheckStatus.visibility = View.VISIBLE
+        when (txn.status) {
+            "success" -> {
+                binding.tvStatusIcon.text = "\u2713"
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_done)
+                binding.tvStatusText.text = "Payment Successful"
+                binding.tvStatusText.setTextColor(getColor(R.color.accent_green))
+            }
+            "reversed" -> {
+                binding.tvStatusIcon.text = "\u21a9"
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                binding.tvStatusText.text = "Payment Reversed"
+                binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
+            }
+            "pending" -> {
+                binding.tvStatusIcon.text = "\u2026"
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                binding.tvStatusText.text = "Status Pending"
+                binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
+            }
+            else -> {
+                binding.tvStatusIcon.text = "!"
+                binding.tvStatusIcon.setBackgroundResource(R.drawable.bg_step_active)
+                binding.tvStatusText.text = "Payment Failed"
+                binding.tvStatusText.setTextColor(getColor(R.color.accent_amber))
+            }
         }
+
+        // Reversal / refund block \u2014 shows the debit and its refund together.
+        if (txn.status == "reversed") {
+            binding.layoutReversal.visibility = View.VISIBLE
+            binding.tvReversalNote.text = txn.amount?.let {
+                "\u20b9 ${formatIndianNumber(it)} was debited, then refunded to your account."
+            } ?: "The debited amount was refunded to your account."
+            val refRrn = txn.reversalRrn ?: txn.rrn
+            if (!refRrn.isNullOrBlank()) {
+                binding.tvReversalRrn.text = "Refund ref: $refRrn"
+                binding.tvReversalRrn.visibility = View.VISIBLE
+            } else {
+                binding.tvReversalRrn.visibility = View.GONE
+            }
+        } else {
+            binding.layoutReversal.visibility = View.GONE
+        }
+
+        // Offer an SMS re-check when no SMS has been read yet, the reference is
+        // still missing, or the payment isn't a confirmed success.
+        binding.btnCheckStatus.visibility =
+            if (txn.rawSmsText.isNullOrBlank() || txn.rrn.isNullOrBlank() || txn.status != "success")
+                View.VISIBLE else View.GONE
 
         // Amount
         val amount = txn.amount
@@ -159,10 +195,16 @@ class TransactionReceiptActivity : AppCompatActivity() {
 
         val parsed = SmsInboxReader.findMatchingSms(this, txn)
         if (parsed != null) {
+            // A reversal/refund SMS means the payment was refunded.
+            val newStatus = if (parsed.isReversal) "reversed"
+                            else if (parsed.type == "debit") "success"
+                            else txn.status
             store.updateTransaction(txnId!!) { t ->
                 t.copy(
-                    status = "success",
-                    rrn = parsed.rrn ?: t.rrn,
+                    status = newStatus,
+                    // Keep the original debit RRN; record the refund ref separately.
+                    rrn = t.rrn ?: parsed.rrn,
+                    reversalRrn = if (parsed.isReversal) parsed.rrn else t.reversalRrn,
                     balance = parsed.balance ?: t.balance,
                     accountNumber = parsed.accountNumber ?: t.accountNumber
                 )
@@ -175,7 +217,9 @@ class TransactionReceiptActivity : AppCompatActivity() {
                 )
             }
 
-            Toast.makeText(this, "Transaction confirmed from SMS", Toast.LENGTH_SHORT).show()
+            val msg = if (parsed.isReversal) "Payment was reversed \u2014 amount refunded."
+                      else "Transaction confirmed from SMS"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             displayTransaction()
         } else {
             Toast.makeText(this, "No matching SMS found", Toast.LENGTH_SHORT).show()

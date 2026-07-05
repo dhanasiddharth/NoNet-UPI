@@ -23,6 +23,7 @@ import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.model.UpiPaymentData
+import com.offlineupi.app.util.UssdCodeBuilder
 import com.offlineupi.app.util.formatIndianNumber
 import com.offlineupi.app.util.formatMobileForDisplay
 import com.offlineupi.app.viewmodel.ConfirmationViewModel
@@ -33,7 +34,10 @@ import android.view.View
  * When the user taps "Pay via USSD (*99#)":
  *  A. Copies UPI ID to clipboard (auto-clears after 60s).
  *  B. Requests CALL_PHONE permission if not already granted.
- *  C. Auto-dials *99# using Intent.ACTION_CALL (falls back to ACTION_DIAL if denied).
+ *  C. Auto-dials the deepest safe *99# code (see UssdCodeBuilder) using
+ *     Intent.ACTION_CALL (falls back to ACTION_DIAL if denied) — a full
+ *     one-shot *99*1*1*mobile*amount# when possible, else a *99*1*<method>#
+ *     deep link that opens the session at the payee prompt.
  *  D. Navigates to UssdInstructionActivity with step-by-step guide.
  *
  * SECURITY:
@@ -60,6 +64,7 @@ class ConfirmationActivity : AppCompatActivity() {
     // Holds the USSD string while waiting for permission result
     private var pendingPayeeAddress: String? = null
     private var pendingAmount: String? = null
+    private var dialPlan: UssdCodeBuilder.DialPlan? = null
 
     /** Launcher for CALL_PHONE runtime permission. */
     private val callPermissionLauncher =
@@ -167,6 +172,10 @@ class ConfirmationActivity : AppCompatActivity() {
         else UssdAccessibilityService.MODE_PAYMENT
         UssdAccessibilityService.setPendingPayment(payeeAddress, amount, remarks, mode)
 
+        dialPlan = UssdCodeBuilder.buildPaymentPlan(
+            payeeAddress, amount, remarks, payeeType == TYPE_PHONE
+        )
+
         if (!isAccessibilityServiceEnabled()) {
             promptEnableAccessibility(payeeAddress, amount)
         } else {
@@ -223,11 +232,12 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     /**
-     * Dials *99# — the NUUP USSD entry point. The user then navigates
-     * the interactive USSD menu (Send Money → UPI ID → paste VPA → enter amount).
+     * Dials the planned *99# code — either a one-shot/deep-link code that
+     * skips the NUUP menus, or plain *99# as fallback.
      */
     private fun dialUssd99() {
-        val uri = Uri.parse("tel:*99" + Uri.encode("#"))
+        val code = dialPlan?.code ?: UssdCodeBuilder.ENTRY_CODE
+        val uri = Uri.parse("tel:" + Uri.encode(code))
         try {
             startActivity(Intent(Intent.ACTION_CALL, uri))
         } catch (e: Exception) {
@@ -236,10 +246,11 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     /**
-     * Fallback: opens the dialer pre-filled with *99# when CALL_PHONE is denied.
+     * Fallback: opens the dialer pre-filled with the USSD code when CALL_PHONE is denied.
      */
     private fun fallbackDialer() {
-        val uri = Uri.parse("tel:*99" + Uri.encode("#"))
+        val code = dialPlan?.code ?: UssdCodeBuilder.ENTRY_CODE
+        val uri = Uri.parse("tel:" + Uri.encode(code))
         startActivity(Intent(Intent.ACTION_DIAL, uri))
     }
 
@@ -249,6 +260,8 @@ class ConfirmationActivity : AppCompatActivity() {
             putExtra(UssdInstructionActivity.EXTRA_AMOUNT, amount)
             putExtra(UssdInstructionActivity.EXTRA_REMARKS, UssdAccessibilityService.pendingRemarks)
             putExtra(UssdInstructionActivity.EXTRA_PAYEE_TYPE, payeeType)
+            putExtra(UssdInstructionActivity.EXTRA_DIAL_CODE, dialPlan?.code ?: UssdCodeBuilder.ENTRY_CODE)
+            putExtra(UssdInstructionActivity.EXTRA_DIAL_DEPTH, (dialPlan?.depth ?: UssdCodeBuilder.Depth.MENU_ONLY).name)
         })
     }
 }
