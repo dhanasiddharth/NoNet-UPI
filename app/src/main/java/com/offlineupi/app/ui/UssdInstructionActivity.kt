@@ -733,16 +733,10 @@ class UssdInstructionActivity : AppCompatActivity() {
         binding.layoutResult.visibility = View.VISIBLE
 
         if (success) {
-            binding.tvResultStatus.text = "\u2713"
-            binding.tvResultStatus.setBackgroundResource(R.drawable.bg_step_done)
-            binding.tvResultStatus.setTextColor(getColor(R.color.white))
             binding.tvResult.text = getString(R.string.ussd_result_success)
             binding.tvResult.setTextColor(getColor(R.color.accent_green))
             binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_success)
         } else {
-            binding.tvResultStatus.text = "!"
-            binding.tvResultStatus.setBackgroundResource(R.drawable.bg_step_active)
-            binding.tvResultStatus.setTextColor(getColor(R.color.white))
             binding.tvResult.text = getString(R.string.ussd_result_failure)
             binding.tvResult.setTextColor(getColor(R.color.accent_amber))
             binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_failure)
@@ -758,9 +752,6 @@ class UssdInstructionActivity : AppCompatActivity() {
     private fun showProvisional(rawText: String?) {
         binding.dividerResult.visibility = View.VISIBLE
         binding.layoutResult.visibility = View.VISIBLE
-        binding.tvResultStatus.text = "…"
-        binding.tvResultStatus.setBackgroundResource(R.drawable.bg_step_active)
-        binding.tvResultStatus.setTextColor(getColor(R.color.white))
         binding.tvResult.text = getString(R.string.ussd_result_verifying)
         binding.tvResult.setTextColor(getColor(R.color.accent_amber))
         binding.tvUssdSubtitle.text = getString(R.string.ussd_subtitle_result_pending_verify)
@@ -769,15 +760,18 @@ class UssdInstructionActivity : AppCompatActivity() {
     }
 
     private fun setResultDetails(rawText: String?) {
-        if (!rawText.isNullOrBlank()) {
-            val buttonWords = setOf("ok", "cancel", "send", "reply")
-            val cleaned = rawText.lines()
-                .filter { it.trim().lowercase() !in buttonWords }
-                .joinToString("\n").trim()
-            if (cleaned.isNotBlank()) {
-                binding.tvResultDetails.text = cleaned
-                binding.tvResultDetails.visibility = View.VISIBLE
-            }
+        val buttonWords = setOf("ok", "cancel", "send", "reply")
+        val cleaned = rawText?.lines()
+            ?.filter { it.trim().lowercase() !in buttonWords }
+            ?.joinToString("\n")?.trim().orEmpty()
+        if (cleaned.isNotBlank()) {
+            binding.tvResultDetails.text = cleaned
+            binding.tvResultDetails.visibility = View.VISIBLE
+        } else {
+            // A verdict without text must also clear any provisional dialog
+            // text — a stale operator error under "Payment successful" reads
+            // as a contradiction.
+            binding.tvResultDetails.visibility = View.GONE
         }
     }
 

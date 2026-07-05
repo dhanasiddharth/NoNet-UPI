@@ -179,15 +179,6 @@
                 android:layout_marginTop="14dp" />
 
             <TextView
-                android:id="@+id/tvResultStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_primary"
-                android:textSize="13.5sp"
-                android:lineSpacingExtra="2dp"
-                android:layout_marginTop="4dp" />
-
-            <TextView
                 android:id="@+id/tvResultDetails"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
