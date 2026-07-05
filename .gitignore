@@ -36,3 +36,9 @@ local.properties
 obj/
 .externalNativeBuild/
 .cxx/
+# Personal portfolio data — generated locally by tools/, never committed
+app/src/main/assets/portfolio_seed.json
+docs/design/portfolio_seed.json
+docs/design/design_data.json
+docs/design/design_data.js
+docs/design/market_data.json

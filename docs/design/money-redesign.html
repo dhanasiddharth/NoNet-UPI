@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finance — Money Tab Design</title>
+<style>
+  /* Deliberately single-theme: the app is dark-only, the spec renders in its world. */
+  :root{
+    --page:#060908; --ink:#ECF2EF; --muted:#94A49C; --line:#24302A;
+    --bg:#0A0F0D; --surface:#131A16; --raised:#192420; --stroke:#24302A;
+    --brand:#34D88F; --brand-deep:#0E9E6E;
+    --good:#34D88F; --bad:#F26A5B; --amber:#F0A44B;
+    --india:#16A56A; --us:#5B8DEF; --gold:#C8842E; --crypto:#A17AE0;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{
+    margin:0; padding:0 24px 120px; background:var(--page); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  main{max-width:1180px; margin:0 auto}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; color:var(--brand); margin:56px 0 10px}
+  h1{font-size:clamp(30px,4.5vw,44px); line-height:1.06; letter-spacing:-.02em; font-weight:800; margin:0 0 14px; max-width:22ch; text-wrap:balance}
+  h2{font-size:23px; font-weight:750; letter-spacing:-.01em; margin:0 0 6px; text-wrap:balance}
+  p{max-width:64ch; color:var(--muted); margin:8px 0}
+  p strong,li strong{color:var(--ink)}
+  section{margin-top:88px}
+  .lede{font-size:17px}
+  .num{font-variant-numeric:tabular-nums}
+
+  .statrow{display:flex; gap:12px; flex-wrap:wrap; margin:26px 0 8px}
+  .stat{background:var(--surface); border:1px solid var(--stroke); border-radius:14px; padding:14px 18px; min-width:170px}
+  .stat .k{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .stat .v{font-size:22px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums}
+  .stat .s{font-size:12px; color:var(--muted); margin-top:2px}
+  .swatches{display:flex; gap:10px; margin-top:18px; flex-wrap:wrap}
+  .sw{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted)}
+  .sw i{width:14px;height:14px;border-radius:4px;display:inline-block}
+
+  .duo{display:grid; grid-template-columns:auto 1fr; gap:40px; align-items:start}
+  @media(max-width:900px){.duo{grid-template-columns:1fr}}
+  .notes{position:sticky; top:28px; max-width:420px}
+  .notes h3{font-size:15px; font-weight:700; margin:22px 0 4px}
+  .notes p{font-size:14px; margin:4px 0}
+  .notes ul{color:var(--muted); font-size:14px; padding-left:18px; margin:6px 0}
+  .notes li{margin:5px 0}
+  .phones{display:flex; gap:34px; flex-wrap:wrap}
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    width:393px; background:var(--bg); border:1px solid #232B27; border-radius:46px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 0 0 6px #000;
+    overflow:hidden; flex:none;
+  }
+  .screen{height:812px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; position:relative}
+  .screen::-webkit-scrollbar{display:none}
+  .sbar{display:flex; justify-content:space-between; padding:16px 26px 4px; font-size:13.5px; font-weight:600; color:var(--ink)}
+  .content{padding:8px 20px 96px}
+
+  .apphead{display:flex; align-items:center; justify-content:space-between; margin:10px 0 2px}
+  .apphead .t{font-size:22px; font-weight:800}
+  .sync{font-size:11.5px; color:var(--muted); background:var(--surface); border:1px solid var(--stroke); border-radius:999px; padding:4px 10px}
+  .sync i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand);margin-right:6px;vertical-align:1px}
+
+  .label{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .hero{margin-top:14px}
+  .hero .vrow{display:flex; align-items:baseline; gap:10px}
+  .hero .v{font-size:34px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .eye{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:4px}
+  .chip{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; border-radius:999px; padding:3px 9px; font-variant-numeric:tabular-nums}
+  .chip.up{color:var(--good); background:rgba(52,216,143,.12)}
+  .chip.down{color:var(--bad); background:rgba(242,106,91,.12)}
+  .chip.flat{color:var(--muted); background:var(--surface)}
+  .hero .sub{font-size:12.5px; color:var(--muted); margin-top:4px}
+  .masked .m{filter:blur(9px)}
+
+  .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:16px}
+  .tile{background:var(--surface); border:1px solid var(--stroke); border-radius:14px; padding:10px 10px 9px; cursor:pointer; transition:transform .12s, border-color .15s}
+  .tile:active{transform:scale(.96)}
+  .tile.on{border-color:var(--tc); background:var(--raised)}
+  .tile .n{font-size:11px; font-weight:700; color:var(--muted); display:flex; align-items:center; gap:5px}
+  .tile .n i{width:7px;height:7px;border-radius:50%;background:var(--tc)}
+  .tile .val{font-size:13px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; white-space:nowrap; letter-spacing:-.01em}
+  .tile .d{font-size:11px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
+  .d.up{color:var(--good)} .d.down{color:var(--bad)} .d.flat{color:var(--muted)}
+
+  .card{background:var(--surface); border:1px solid var(--stroke); border-radius:var(--radius); padding:14px; margin-top:14px}
+  .card .head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+  .card .head .label{margin:0}
+
+  .chips{display:flex; gap:6px; flex-wrap:wrap}
+  .rchip{font-size:12px; font-weight:700; color:var(--muted); background:var(--bg); border:1px solid var(--stroke); border-radius:999px; padding:5px 11px; cursor:pointer; transition:all .12s}
+  .rchip.on{color:#06120C; background:var(--brand); border-color:var(--brand)}
+  .cmp{font-size:11.5px; font-weight:700; border-radius:999px; padding:5px 10px; cursor:pointer; border:1px solid var(--stroke); color:var(--muted); background:var(--bg)}
+  .cmp.on{color:var(--ink); border-color:var(--muted)}
+
+  .readout{display:flex; align-items:baseline; gap:8px; margin:10px 2px 2px; min-height:24px}
+  .readout .rv{font-size:17px; font-weight:800; font-variant-numeric:tabular-nums}
+  .readout .rd{font-size:12px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums}
+  svg text{font-family:inherit}
+  .legend{display:flex; gap:14px; margin-top:8px; font-size:11.5px; color:var(--muted); flex-wrap:wrap}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .legend i{width:14px; height:0; border-top:2.5px solid; display:inline-block; border-radius:2px}
+
+  .seg{display:flex; background:var(--bg); border:1px solid var(--stroke); border-radius:12px; padding:3px; gap:3px}
+  .seg button{flex:1; border:none; background:none; color:var(--muted); font-size:12px; font-weight:700; padding:6px 0; border-radius:9px; cursor:pointer; transition:all .12s}
+  .seg button.on{background:var(--raised); color:var(--ink)}
+  .crumb{font-size:11.5px; color:var(--muted); margin:10px 2px 6px; min-height:16px}
+  .crumb b{color:var(--ink); cursor:pointer}
+  #treemap{position:relative; height:224px; margin-top:2px}
+  .tnode{position:absolute; border-radius:8px; overflow:hidden; cursor:pointer; transition:transform .12s; outline:2px solid var(--bg)}
+  .tnode:active{transform:scale(.97)}
+  .tnode .tl{position:absolute; inset:6px 7px auto 8px; font-size:11px; font-weight:700; line-height:1.25; color:var(--ink); text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  .tnode .tp{position:absolute; left:8px; bottom:6px; font-size:10.5px; font-weight:700; color:rgba(236,242,239,.85); font-variant-numeric:tabular-nums}
+  .alist{margin-top:10px}
+  .arow{display:flex; align-items:center; gap:10px; padding:7px 2px; font-size:13px; border-top:1px solid var(--stroke)}
+  .arow:first-child{border-top:none}
+  .arow i{width:9px;height:9px;border-radius:3px;flex:none}
+  .arow .an{font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .arow .ap{color:var(--muted); font-variant-numeric:tabular-nums; width:52px; text-align:right}
+  .arow .av{font-weight:700; font-variant-numeric:tabular-nums; width:80px; text-align:right}
+
+  /* XIRR card */
+  .xr{margin-top:6px}
+  .xrow{padding:9px 2px; border-top:1px solid var(--stroke)}
+  .xrow:first-child{border-top:none}
+  .xrow .top{display:flex; align-items:center; gap:8px; font-size:13px}
+  .xrow .top .xn{font-weight:700; flex:1}
+  .xrow .top .bm{font-size:11px; color:var(--muted)}
+  .bars{display:grid; grid-template-columns:1fr; gap:4px; margin-top:7px}
+  .bar{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
+  .bar .track{flex:1; height:10px; position:relative; background:var(--bg); border-radius:5px; overflow:hidden}
+  .bar .fill{position:absolute; top:0; bottom:0; border-radius:5px}
+  .bar .bl{width:64px; flex:none}
+  .bar .bv{width:52px; text-align:right; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums}
+  .delta{margin-left:auto}
+
+  /* alerts */
+  .rule{display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; font-size:12.5px; margin-top:8px}
+  .rule b{color:var(--ink)}
+  .rule .edit{margin-left:auto; color:var(--brand); font-weight:700; cursor:pointer; font-size:12px}
+  .alert{display:flex; gap:10px; padding:9px 2px; border-top:1px solid var(--stroke); font-size:12.5px; align-items:center}
+  .alert .dt{color:var(--muted); width:44px; flex:none; font-variant-numeric:tabular-nums}
+  .alert .nm{font-weight:600; flex:1}
+  .alert .av{color:var(--muted); font-variant-numeric:tabular-nums; margin-right:6px}
+
+  /* holdings */
+  .grp{display:flex; align-items:center; gap:8px; margin:16px 2px 4px; font-size:11px; letter-spacing:.1em; font-weight:700; color:var(--muted); text-transform:uppercase}
+  .grp i{width:8px;height:8px;border-radius:50%}
+  .grp .gv{margin-left:auto; font-variant-numeric:tabular-nums; letter-spacing:0}
+  .hrow{display:flex; align-items:center; gap:10px; padding:10px 2px; border-top:1px solid var(--stroke); cursor:pointer}
+  .hrow .hl{flex:1; min-width:0}
+  .hrow .hn{font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .hrow .hs{font-size:11.5px; color:var(--muted); margin-top:1px}
+  .hrow .hr{text-align:right}
+  .hrow .hv{font-size:14px; font-weight:700; font-variant-numeric:tabular-nums}
+  .hrow .hd{font-size:11.5px; font-weight:700; margin-top:1px; font-variant-numeric:tabular-nums}
+
+  .navbar{position:sticky; bottom:0; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--stroke); display:flex; padding:8px 8px 18px; margin:0 -20px -96px}
+  .nv{flex:1; text-align:center; font-size:11px; font-weight:600; color:var(--muted)}
+  .nv.on{color:var(--brand)}
+  .nv .ic{display:block; font-size:16px; margin-bottom:2px}
+  .nv.on .pill{background:var(--raised); border-radius:999px; padding:3px 14px; display:inline-block}
+
+  /* holding detail (phone B) */
+  .backrow{display:flex; align-items:center; gap:10px; margin-top:10px}
+  .backrow .bk{font-size:20px; color:var(--muted); cursor:pointer}
+  .backrow .t{font-size:18px; font-weight:800; flex:1}
+  .tick{font-size:10.5px; font-weight:700; color:var(--muted); background:var(--surface); border:1px solid var(--stroke); padding:3px 8px; border-radius:8px}
+  .statgrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px}
+  .sg{background:var(--surface); border:1px solid var(--stroke); border-radius:12px; padding:9px 10px}
+  .sg .k{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .sg .v{font-size:13.5px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums}
+  .trow{display:flex; gap:10px; padding:8px 2px; border-top:1px solid var(--stroke); font-size:12.5px; align-items:center}
+  .trow .td{color:var(--muted); width:78px; font-variant-numeric:tabular-nums}
+  .trow .side{font-size:10px; font-weight:800; padding:2px 7px; border-radius:6px}
+  .side.b{color:var(--good); background:rgba(52,216,143,.12)}
+  .side.s{color:var(--amber); background:rgba(240,164,75,.12)}
+  .trow .tq{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600}
+
+  /* notification mock (phone C) */
+  .notif{background:#1C2621; border:1px solid var(--stroke); border-radius:20px; padding:13px 14px; margin-top:14px}
+  .notif .approw{display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--muted)}
+  .notif .approw i{width:14px;height:14px;border-radius:4px;background:var(--brand-deep)}
+  .notif .nt{font-size:13.5px; font-weight:700; margin-top:7px}
+  .notif .nb{font-size:12.5px; color:var(--muted); margin-top:2px}
+  .notif .acts{display:flex; gap:18px; margin-top:10px; font-size:12.5px; font-weight:700; color:var(--brand)}
+  .sheet{background:var(--raised); border:1px solid var(--stroke); border-radius:20px 20px 24px 24px; padding:16px; margin-top:18px}
+  .slider{margin:14px 4px 4px}
+  .slider .trk{height:4px; background:var(--bg); border-radius:2px; position:relative}
+  .slider .fill{position:absolute; left:20%; right:44%; top:0; bottom:0; background:var(--brand); border-radius:2px}
+  .slider .knob{position:absolute; left:56%; top:50%; width:20px; height:20px; border-radius:50%; background:var(--brand); transform:translate(-50%,-50%); box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .ticks{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:8px}
+
+  .foot{margin-top:70px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:18px; max-width:64ch}
+  code{background:var(--surface); border:1px solid var(--stroke); border-radius:6px; padding:1px 6px; font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+  <div class="eyebrow">Finance · Money tab</div>
+  <h1>One glance: what it's worth, how it's doing, and whether it beats the index.</h1>
+  <p class="lede">Everything below renders from your real data — the full trade history across Kite, Groww, IBKR,
+     physical gold and crypto, priced with Yahoo Finance daily closes and USDINR. The phones are live:
+     scrub the charts, switch ranges, drill the allocation, tap a holding.
+     <em>(Data loads from the local, git-ignored <code>design_data.js</code>; no portfolio numbers live in this file.)</em></p>
+
+  <div class="statrow">
+    <div class="stat"><div class="k">Portfolio</div><div class="v" id="s-total">—</div><div class="s" id="s-inv">—</div></div>
+    <div class="stat"><div class="k">Your XIRR</div><div class="v" style="color:var(--good)" id="s-xirr">—</div><div class="s">money-weighted, all cashflows</div></div>
+    <div class="stat"><div class="k">Same money in indexes</div><div class="v" id="s-bxirr">—</div><div class="s" id="s-bval">—</div></div>
+    <div class="stat"><div class="k">Edge</div><div class="v" id="s-edge">—</div><div class="s">you vs Nifty 50 + S&amp;P 500 blend</div></div>
+  </div>
+  <div class="swatches">
+    <span class="sw"><i style="background:var(--brand)"></i>Portfolio</span>
+    <span class="sw"><i style="background:var(--india)"></i>India</span>
+    <span class="sw"><i style="background:var(--us)"></i>US</span>
+    <span class="sw"><i style="background:var(--gold)"></i>Gold</span>
+    <span class="sw"><i style="background:var(--crypto)"></i>Crypto</span>
+    <span class="sw"><i style="background:var(--muted)"></i>Benchmark / invested</span>
+  </div>
+
+  <!-- ================= SECTION 1 : MONEY TAB ================= -->
+  <section>
+    <h2>The Money tab</h2>
+    <p>Value first, performance second, decisions third — one scroll, no sub-menus.</p>
+    <div class="duo">
+      <div class="phones"><div class="phone"><div class="screen" id="scrA">
+        <div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
+        <div class="content" id="tabA">
+
+          <div class="apphead">
+            <div class="t">Money</div>
+            <div class="sync"><i></i>Synced 9:41</div>
+          </div>
+
+          <div class="hero">
+            <div class="label" id="heroLabel">Portfolio</div>
+            <div class="vrow">
+              <div class="v m num" id="heroVal">—</div>
+              <button class="eye" id="eyeBtn" title="Hide values">👁</button>
+            </div>
+            <div style="margin-top:6px" id="heroChips"></div>
+            <div class="sub m" id="heroSub">—</div>
+          </div>
+
+          <div class="tiles" id="tiles"></div>
+
+          <div class="card">
+            <div class="head">
+              <span class="label">Performance</span>
+              <button class="cmp" id="cmpBtn">vs index ⇄</button>
+            </div>
+            <div class="chips" id="ranges"></div>
+            <div class="readout">
+              <span class="rv m num" id="roVal"></span>
+              <span class="chip flat" id="roChg"></span>
+              <span class="rd num" id="roDate"></span>
+            </div>
+            <svg id="perf" width="100%" height="196" viewBox="0 0 353 196" preserveAspectRatio="none"></svg>
+            <div class="legend" id="legend"></div>
+          </div>
+
+          <div class="card">
+            <div class="head"><span class="label">Allocation</span>
+              <span class="rd num" id="allocTotal" style="font-size:11.5px;color:var(--muted)"></span></div>
+            <div class="seg" id="allocSeg">
+              <button data-m="market" class="on">Market</button>
+              <button data-m="sector">Sector</button>
+              <button data-m="holding">Holdings</button>
+            </div>
+            <div class="crumb" id="crumb"></div>
+            <div id="treemap"></div>
+            <div class="alist" id="alist"></div>
+          </div>
+
+          <div class="card">
+            <div class="head"><span class="label">You vs the index</span><span class="rd" style="font-size:11px;color:var(--muted)">same cashflows, same dates</span></div>
+            <div id="xirrHead" style="font-size:13px; margin:2px 2px 6px; color:var(--muted)"></div>
+            <div class="xr" id="xirr"></div>
+          </div>
+
+          <div class="card">
+            <div class="head"><span class="label">Movement alerts</span><span class="chip flat" style="font-size:10.5px">event-driven · no digests</span></div>
+            <div class="rule">Alert when any holding moves <b>&nbsp;±4%&nbsp;</b> in a day <span class="edit">Edit</span></div>
+            <div class="rule" style="margin-top:6px">3 holdings have custom thresholds <span class="edit">Manage</span></div>
+            <div id="alerts" style="margin-top:6px"></div>
+          </div>
+
+          <div class="card">
+            <div class="head"><span class="label">Holdings</span><span class="rd" style="font-size:11px;color:var(--muted)" id="hcount"></span></div>
+            <div id="holdings"></div>
+          </div>
+
+          <div class="navbar">
+            <div class="nv"><span class="ic">⚡</span>Pay</div>
+            <div class="nv on"><span class="pill"><span class="ic">📈</span></span>Money</div>
+            <div class="nv"><span class="ic">☰</span>Bank</div>
+            <div class="nv"><span class="ic">···</span>More</div>
+          </div>
+        </div>
+      </div></div></div>
+
+      <aside class="notes">
+        <h3>Hero &amp; market tiles</h3>
+        <ul>
+          <li><strong>India · US · Gold · Crypto tiles</strong> mirror the sheet's Summary. Tapping one refocuses the whole screen — chart, readout and label follow. Tap again for total.</li>
+          <li>The eye masks every number (blur, not removal — layout never shifts). Same pattern as the Pay tab balance pill.</li>
+          <li>Day change is close-over-close from the synced daily bars; the sync chip shows staleness instead of a spinner.</li>
+        </ul>
+        <h3>Performance chart</h3>
+        <ul>
+          <li>One y-axis, ₹ only. <strong>vs index ⇄</strong> overlays two references: the gray line is <em>the same cashflows bought into Nifty 50 / S&amp;P 500 on the same dates</em>, the dotted line is money invested. The gap between emerald and gray is your alpha, visible per range.</li>
+          <li>Scrub anywhere — the readout above the chart becomes the scrubbed date; release to return to "now". No tooltips floating over data.</li>
+          <li>Ranges are windows over locally stored daily bars — switching is instant and offline.</li>
+        </ul>
+        <h3>Allocation (the Google-Finance upgrade)</h3>
+        <ul>
+          <li>A drillable <strong>treemap</strong> instead of a donut: area = weight, so a 26% Gold position is felt, not read from a legend. Market → sector → holding, breadcrumb to climb back.</li>
+          <li>Tiles keep their market's hue; the list below always mirrors the current level with exact ₹ and %.</li>
+          <li>Donuts hide small slices and force color-matching across a legend — the treemap direct-labels everything ≥ ~5% and groups the tail into "Other".</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= SECTION 2 : DETAIL + ALERTS ================= -->
+  <section>
+    <h2>Holding detail &amp; the alert flow</h2>
+    <p>Tap any holding on the Money tab — the detail phone follows. Alerts are per-line-item and only fire on significant single-day moves.</p>
+    <div class="duo">
+      <div class="phones">
+        <div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
+          <div class="content" id="tabB"></div>
+        </div></div>
+
+        <div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
+          <div class="content">
+            <div class="apphead"><div class="t">Alerts</div><div class="sync"><i></i>3 rules</div></div>
+            <p style="font-size:12.5px; margin-top:4px">What lands on the lock screen — nothing else, ever. No daily or weekly digests.</p>
+            <div class="notif">
+              <div class="approw"><i></i> Finance · now</div>
+              <div class="nt" id="nf1t">—</div>
+              <div class="nb" id="nf1b">—</div>
+              <div class="acts"><span>View position</span><span>Mute 1w</span></div>
+            </div>
+            <div class="notif" style="opacity:.75">
+              <div class="approw"><i></i> Finance · Tue</div>
+              <div class="nt" id="nf2t">—</div>
+              <div class="nb" id="nf2b">—</div>
+              <div class="acts"><span>View position</span><span>Mute 1w</span></div>
+            </div>
+            <div class="sheet">
+              <div class="label">Threshold · Netflix</div>
+              <div style="font-size:13.5px; font-weight:700; margin-top:8px">Alert on a daily move beyond <span style="color:var(--brand)">±6%</span></div>
+              <div class="slider"><div class="trk"><div class="fill"></div><div class="knob"></div></div>
+                <div class="ticks"><span>±2%</span><span>±4%</span><span>±6%</span><span>±8%</span><span>±12%</span></div>
+              </div>
+              <div style="font-size:11.5px; color:var(--muted); margin-top:10px">
+                Default is ±4%/day per holding. A quiet threshold check runs after each price sync — alerts fire from data already on the device, nothing is polled server-side.</div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <aside class="notes">
+        <h3>Holding detail</h3>
+        <ul>
+          <li>Price history with <strong>your buys marked on the line</strong> — cost-versus-price is instantly visible. Sells get hollow markers.</li>
+          <li>Stat grid: units, invested, value, day move, <strong>XIRR of this position</strong>, and what the same cashflows in its market index returned.</li>
+          <li>Trade list is the receipt-feed pattern from the Pay tab — same rhythm, same date grouping.</li>
+        </ul>
+        <h3>Alert engine</h3>
+        <ul>
+          <li>Rule = <code>|close ÷ prev-close − 1| ≥ threshold</code> per holding, evaluated after the daily sync and on any manual refresh. Default ±4%, per-item override (crypto wants ±8%, index funds ±2.5%).</li>
+          <li>Notification says <em>what moved, how much, and the position size</em> — enough to decide whether to open the app.</li>
+          <li>Deliberately no schedules: your ask was flags on significant movement only. The 90-day backtest on your real holdings: <strong id="acount">—</strong> alerts at ±4% — roughly one every other day; at ±6% it's ~2/week.</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= SECTION 3 : ENGINE ================= -->
+  <section>
+    <h2>Data notes (what the numbers are)</h2>
+    <p style="max-width:74ch">
+      <strong>Validation.</strong> India current value matches the sheet's INR rollup to a rounding error, and gold invested matches the Gold tab to the rupee — the trade-derived model reproduces the spreadsheet.
+      <strong>Gold value</strong> uses international spot (GC=F × USDINR ÷ 31.1035) — a few percent under Indian retail rates, which carry import duty; a premium factor will be a setting.
+      <strong>US</strong> is valued at the latest Yahoo close, so it reads slightly above the sheet's static snapshot.
+      <strong>XIRR</strong> is bisection-solved on actual dated cashflows; the benchmark comparison buys index units with each cashflow on its date — a true "what if the same money went into the index".
+    </p>
+    <div class="foot">
+      Sources in repo: <code>tools/export_portfolio.py</code> (sheet → seed), <code>tools/fetch_market_data.py</code> (Yahoo closes),
+      <code>tools/build_design_data.py</code> (series, XIRR, benchmark sim, movers) → <code>design_data.js</code> rendered here.
+      The app implements the same pipeline: seed JSON → Room, WorkManager daily sync, alert check post-sync.
+    </div>
+  </section>
+
+</main>
+
+<script src="design_data.js"></script>
+<script>
+const D = window.PORTFOLIO_DATA;
+const BC = {India:'#16A56A', US:'#5B8DEF', Gold:'#C8842E', Crypto:'#A17AE0'};
+const BRAND='#34D88F', MUT='#94A49C', BAD='#F26A5B';
+const $ = id => document.getElementById(id);
+
+/* ---------- formatting ---------- */
+const inr = new Intl.NumberFormat('en-IN',{maximumFractionDigits:0});
+function cr(v){ const a=Math.abs(v);
+  if(a>=1e7) return '₹'+(v/1e7).toFixed(2)+' Cr';
+  if(a>=1e5) return '₹'+(v/1e5).toFixed(1)+' L';
+  return '₹'+inr.format(Math.round(v)); }
+const full = v => '₹'+inr.format(Math.round(v));
+const pct = v => (v>=0?'+':'')+(v*100).toFixed(1)+'%';
+const sign = v => (v>=0?'+':'−');
+function dchip(el,v,txt){ el.className='chip '+(v>0.0005?'up':v<-0.0005?'down':'flat'); el.textContent=txt; }
+const fdate = s => new Date(s+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+
+/* ---------- page header stats ---------- */
+const OV=D.stats.overall;
+$('s-total').textContent=cr(OV.value);
+$('s-inv').textContent='invested '+cr(OV.invested);
+$('s-xirr').textContent=pct(OV.xirr);
+$('s-bxirr').textContent=pct(OV.benchXirr);
+$('s-bval').textContent='would be worth '+cr(OV.benchValue);
+$('s-edge').textContent='+'+((OV.xirr-OV.benchXirr)*100).toFixed(1)+' pp';
+
+/* ---------- state ---------- */
+let range='1Y', bucket=null, compare=false, masked=false;
+const RANGES=['1M','3M','6M','YTD','1Y','All'];
+const CAL=D.calendar, NPTS=CAL.length;
+
+function seriesFor(){ return bucket? D.buckets[bucket] : D.total; }
+function startIdx(){
+  const end=new Date(CAL[NPTS-1]+'T00:00');
+  let from;
+  if(range==='All') return 0;
+  if(range==='YTD') from=new Date(end.getFullYear(),0,1);
+  else { const days={'1M':30,'3M':91,'6M':182,'1Y':365}[range]; from=new Date(end); from.setDate(from.getDate()-days); }
+  const iso=from.toISOString().slice(0,10);
+  let i=CAL.findIndex(d=>d>=iso); if(i<0)i=0;
+  // never start on a zero (before this bucket existed)
+  const s=seriesFor(); while(i<NPTS-1 && !s[i]) i++;
+  return i;
+}
+
+/* ---------- hero + tiles ---------- */
+function dayChange(arr){
+  let i=NPTS-1; while(i>0 && arr[i]===arr[i-1]) i--;   // step back over stale weekend points
+  const prev=arr[i-1]||0, curv=arr[NPTS-1];
+  return prev? (curv/prev-1):0;
+}
+function renderHero(){
+  const s=seriesFor(); const v=s[NPTS-1];
+  $('heroLabel').textContent = bucket? bucket+' · portfolio' : 'Portfolio';
+  $('heroVal').textContent = cr(v);
+  const dc=dayChange(s);
+  const st=bucket? D.stats[bucket]:OV;
+  $('heroChips').innerHTML='';
+  const c1=document.createElement('span'); dchip(c1,dc, sign(dc)+cr(Math.abs(v-v/(1+dc)))+' · '+pct(Math.abs(dc)).slice(1)+' today');
+  c1.classList.add('m');
+  const c2=document.createElement('span'); c2.className='chip flat m'; c2.style.marginLeft='6px';
+  c2.textContent='XIRR '+pct(st.xirr);
+  $('heroChips').append(c1,c2);
+  $('heroSub').textContent=full(v)+' · invested '+cr(st.invested)+' · as of '+fdate(D.asOf);
+}
+function renderTiles(){
+  const t=$('tiles'); t.innerHTML='';
+  for(const b of ['India','US','Gold','Crypto']){
+    const v=D.buckets[b][NPTS-1], dc=dayChange(D.buckets[b]);
+    const el=document.createElement('div');
+    el.className='tile'+(bucket===b?' on':''); el.style.setProperty('--tc',BC[b]);
+    el.innerHTML=`<div class="n"><i></i>${b}</div><div class="val m num">${cr(v)}</div>
+      <div class="d num ${dc>0.0005?'up':dc<-0.0005?'down':'flat'}">${pct(dc)}</div>`;
+    el.onclick=()=>{ bucket = bucket===b? null:b; renderAll(); };
+    t.appendChild(el);
+  }
+}
+
+/* ---------- performance chart ---------- */
+const svgNS='http://www.w3.org/2000/svg';
+function el(n,attrs){ const e=document.createElementNS(svgNS,n); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+let scrub=null;
+
+function renderChart(){
+  const svg=$('perf'); svg.innerHTML='';
+  const W=353,H=196,padT=8,padB=20,padL=2,padR=46;
+  const i0=startIdx(), s=seriesFor();
+  const xs=[],ys=[[ ]]; // portfolio
+  const showB=compare && !bucket, showI=compare;
+  const inv=D.invested, ben=D.bench;
+  let lo=Infinity,hi=-Infinity;
+  const rows=[s]; if(showB) rows.push(ben); if(showI) rows.push(inv);
+  for(const r of rows) for(let i=i0;i<NPTS;i++){ const v=r[i]; if(v){ if(v<lo)lo=v; if(v>hi)hi=v; } }
+  if(!isFinite(lo)){lo=0;hi=1;}
+  const span=hi-lo||1; lo-=span*.06; hi+=span*.06;
+  const X=i=>padL+(W-padL-padR)*(i-i0)/Math.max(1,NPTS-1-i0);
+  const Y=v=>padT+(H-padT-padB)*(1-(v-lo)/(hi-lo));
+  // grid
+  for(let g=0;g<3;g++){
+    const gv=lo+(hi-lo)*(g+1)/4, y=Y(gv);
+    svg.appendChild(el('line',{x1:padL,x2:W-padR+4,y1:y,y2:y,stroke:'#1B2420','stroke-width':1}));
+    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT});
+    t.textContent=cr(gv).replace('₹',''); t.classList.add('m'); svg.appendChild(t);
+  }
+  const path=(arr,skipZero)=>{
+    let d=''; for(let i=i0;i<NPTS;i++){ const v=arr[i]; if(!v&&skipZero){continue;}
+      d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v||0).toFixed(1)+' '; } return d; };
+  // area under portfolio
+  const grad=el('linearGradient',{id:'ag',x1:0,y1:0,x2:0,y2:1});
+  grad.appendChild(el('stop',{offset:'0%','stop-color':BRAND,'stop-opacity':.22}));
+  grad.appendChild(el('stop',{offset:'100%','stop-color':BRAND,'stop-opacity':0}));
+  const defs=el('defs',{}); defs.appendChild(grad); svg.appendChild(defs);
+  let d=path(s,true);
+  if(d){ const area=el('path',{d:d+`L${X(NPTS-1)} ${H-padB} L${X(i0)} ${H-padB} Z`,fill:'url(#ag)'}); svg.appendChild(area); }
+  if(showI) svg.appendChild(el('path',{d:path(inv,true),fill:'none',stroke:MUT,'stroke-width':1.6,'stroke-dasharray':'2 4','stroke-linecap':'round'}));
+  if(showB) svg.appendChild(el('path',{d:path(ben,true),fill:'none',stroke:MUT,'stroke-width':2}));
+  svg.appendChild(el('path',{d,fill:'none',stroke:bucket?BC[bucket]:BRAND,'stroke-width':2.4,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  // endpoint
+  svg.appendChild(el('circle',{cx:X(NPTS-1),cy:Y(s[NPTS-1]),r:3.4,fill:bucket?BC[bucket]:BRAND}));
+  // x labels
+  const xt=(i,anchor)=>{const t=el('text',{x:X(i),y:H-6,'font-size':9,fill:MUT,'text-anchor':anchor});
+    t.textContent=new Date(CAL[i]+'T00:00').toLocaleDateString('en-IN',{month:'short',year:range==='All'?'2-digit':undefined}); svg.appendChild(t);};
+  xt(i0,'start'); xt(Math.floor((i0+NPTS-1)/2),'middle'); xt(NPTS-1,'end');
+  // scrub layer
+  const hit=el('rect',{x:0,y:0,width:W,height:H,fill:'transparent'});
+  svg.appendChild(hit);
+  const cl=el('line',{y1:padT,y2:H-padB,stroke:MUT,'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+  const cd=el('circle',{r:4,fill:bucket?BC[bucket]:BRAND,stroke:'#0A0F0D','stroke-width':2,opacity:0});
+  svg.append(cl,cd);
+  const move=ev=>{
+    const r=svg.getBoundingClientRect();
+    const px=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
+    const fr=(px/r.width)*W;
+    let i=Math.round(i0+(fr-padL)/(W-padL-padR)*(NPTS-1-i0));
+    i=Math.max(i0,Math.min(NPTS-1,i));
+    scrub=i; cl.setAttribute('x1',X(i)); cl.setAttribute('x2',X(i));
+    cl.setAttribute('opacity',1);
+    cd.setAttribute('cx',X(i)); cd.setAttribute('cy',Y(s[i]||lo)); cd.setAttribute('opacity',1);
+    renderReadout();
+  };
+  const end=()=>{ scrub=null; cl.setAttribute('opacity',0); cd.setAttribute('opacity',0); renderReadout(); };
+  hit.addEventListener('pointermove',move); hit.addEventListener('pointerdown',move);
+  hit.addEventListener('pointerleave',end); hit.addEventListener('pointerup',end);
+  renderReadout();
+  // legend
+  const lg=$('legend');
+  lg.innerHTML=compare?
+    `<span><i style="border-color:${bucket?BC[bucket]:BRAND}"></i>${bucket||'Portfolio'}</span>`+
+    (showB?`<span><i style="border-color:${MUT}"></i>Same money in index</span>`:'')+
+    `<span><i style="border-color:${MUT}; border-top-style:dotted"></i>Invested</span>`
+    : `<span><i style="border-color:${bucket?BC[bucket]:BRAND}"></i>${bucket? bucket+' value':'Portfolio value'}</span>`;
+}
+function renderReadout(){
+  const s=seriesFor(); const i0=startIdx();
+  const i=scrub??NPTS-1;
+  const v=s[i]||0, v0=s[i0]||s.find(x=>x)||1;
+  $('roVal').textContent=cr(v);
+  // added money isn't growth: report the range's contributions separately and
+  // base the % on gain over (start value + net added)
+  const added=(D.invested[i]||0)-(D.invested[i0]||0);
+  const gain=v-v0-(bucket?0:added);
+  const base=v0+(bucket?0:Math.max(0,added));
+  const gp=base? gain/base:0;
+  dchip($('roChg'),gp, `${sign(gain)}${cr(Math.abs(gain))} · ${pct(Math.abs(gp)).slice(1)}`);
+  $('roChg').classList.add('m');
+  const addTxt=(!bucket && added>1000)? ' · added '+cr(added):'';
+  $('roDate').textContent= scrub!=null? fdate(CAL[i]) : range+addTxt;
+}
+
+/* ---------- range chips / compare ---------- */
+function renderRanges(){
+  const rc=$('ranges'); rc.innerHTML='';
+  for(const r of RANGES){
+    const b=document.createElement('button'); b.className='rchip'+(r===range?' on':''); b.textContent=r;
+    b.onclick=()=>{ range=r; renderRanges(); renderChart(); };
+    rc.appendChild(b);
+  }
+}
+$('cmpBtn').onclick=()=>{ compare=!compare; $('cmpBtn').classList.toggle('on',compare); renderChart(); };
+$('eyeBtn').onclick=()=>{ masked=!masked; document.body.classList.toggle('masked',masked); $('eyeBtn').textContent=masked?'🙈':'👁'; };
+
+/* ---------- allocation treemap ---------- */
+let allocMode='market', drill=null; // drill = {level:'bucket'|'sector', key}
+function allocNodes(){
+  const H=D.holdings;
+  const group=(items,keyf)=>{ const m={};
+    for(const h of items){ const k=keyf(h); (m[k]=m[k]||{key:k,value:0,items:[],bucket:h.bucket}).value+=h.valueInr; m[k].items.push(h);}
+    return Object.values(m).sort((a,b)=>b.value-a.value); };
+  if(allocMode==='market' && !drill) return group(H,h=>h.bucket).map(g=>({...g,label:g.key,color:BC[g.key]}));
+  if(allocMode==='market' && drill)  return group(H.filter(h=>h.bucket===drill.key),h=>h.sector)
+        .map(g=>({...g,label:g.key,color:BC[drill.key]}));
+  if(allocMode==='sector' && !drill) return group(H,h=>h.sector).map(g=>({...g,label:g.key,color:BC[g.items[0].bucket]}));
+  if(allocMode==='sector' && drill)  return drill.items.map(h=>({key:h.isin,label:h.name,value:h.valueInr,color:BC[h.bucket],items:[h]}));
+  // holdings: top 11 + other
+  const hs=[...H]; const top=hs.slice(0,11), rest=hs.slice(11);
+  const nodes=top.map(h=>({key:h.isin,label:h.name,value:h.valueInr,color:BC[h.bucket],items:[h]}));
+  if(rest.length) nodes.push({key:'other',label:'Other · '+rest.length,value:rest.reduce((a,h)=>a+h.valueInr,0),color:'#3A4540',items:rest});
+  return nodes;
+}
+/* simple slice-and-dice alternating squarify-ish layout */
+function layout(nodes,x,y,w,h,out){
+  if(!nodes.length) return;
+  if(nodes.length===1){ out.push({...nodes[0],x,y,w,h}); return; }
+  const total=nodes.reduce((a,n)=>a+n.value,0);
+  let acc=0, i=0; const half=total/2;
+  while(i<nodes.length-1 && acc+nodes[i].value<half){ acc+=nodes[i].value; i++; }
+  if(i===0)i=1;
+  const A=nodes.slice(0,i), B=nodes.slice(i);
+  const fa=A.reduce((a,n)=>a+n.value,0)/total;
+  if(w>=h){ layout(A,x,y,w*fa,h,out); layout(B,x+w*fa,y,w*(1-fa),h,out); }
+  else    { layout(A,x,y,w,h*fa,out); layout(B,x,y+h*fa,w,h*(1-fa),out); }
+}
+function renderAlloc(){
+  const tm=$('treemap'); tm.innerHTML='';
+  const nodes=allocNodes(); const total=nodes.reduce((a,n)=>a+n.value,0);
+  const W=tm.clientWidth||321, H=tm.clientHeight||224;
+  const rects=[]; layout(nodes,0,0,W,H,rects);
+  for(const r of rects){
+    const d=document.createElement('div'); d.className='tnode';
+    const p=r.value/total;
+    d.style.cssText=`left:${r.x+1}px;top:${r.y+1}px;width:${r.w-2}px;height:${r.h-2}px;
+      background:color-mix(in srgb, ${r.color} ${Math.round(26+p*60)}%, #131A16)`;
+    if(r.w>54 && r.h>30) d.innerHTML=`<div class="tl">${r.label}</div><div class="tp m num">${(p*100).toFixed(p<0.1?1:0)}%</div>`;
+    d.onclick=()=>{
+      if(allocMode!=='holding' && !drill){ drill={key:r.key, items:r.items}; renderAlloc(); }
+      else if(r.items && r.items.length===1){ openHolding(r.items[0].isin); }
+    };
+    tm.appendChild(d);
+  }
+  $('crumb').innerHTML = drill? `<b id="crumbBack">‹ All</b> · ${drill.key}` :
+     (allocMode==='holding'?'Top holdings by value · tap to open':'Tap a block to drill in');
+  const cb=$('crumbBack'); if(cb) cb.onclick=()=>{ drill=null; renderAlloc(); };
+  // mirror list
+  const list=$('alist'); list.innerHTML='';
+  for(const n of nodes.slice(0,6)){
+    const p=(n.value/total*100);
+    const row=document.createElement('div'); row.className='arow';
+    row.innerHTML=`<i style="background:${n.color}"></i><span class="an">${n.label}</span>
+      <span class="ap num">${p.toFixed(1)}%</span><span class="av m num">${cr(n.value)}</span>`;
+    list.appendChild(row);
+  }
+  $('allocTotal').textContent=cr(total)+' total';
+}
+document.querySelectorAll('#allocSeg button').forEach(b=>{
+  b.onclick=()=>{ document.querySelectorAll('#allocSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); allocMode=b.dataset.m; drill=null; renderAlloc(); };
+});
+
+/* ---------- XIRR card ---------- */
+function renderXirr(){
+  const gain=OV.value-OV.benchValue;
+  $('xirrHead').innerHTML=`Same cashflows in the indexes would be <b class="m num" style="color:var(--ink)">${cr(OV.benchValue)}</b> —
+    you're <b class="m num" style="color:${gain>=0?'var(--good)':'var(--bad)'}">${cr(Math.abs(gain))} ${gain>=0?'ahead':'behind'}</b>.`;
+  const rows=[['Overall',OV,null,BRAND], ...['India','US','Gold','Crypto'].map(b=>[b,D.stats[b],D.stats[b].benchmark,BC[b]])];
+  const vals=rows.flatMap(([,s])=>[s.xirr||0,s.benchXirr||0]);
+  const maxV=Math.max(...vals,0.01), minV=Math.min(...vals,0);
+  const zero=(-minV)/(maxV-minV)*100;   // shared zero anchor so negatives read
+  const wrap=$('xirr'); wrap.innerHTML='';
+  for(const [name,s,bm,color] of rows){
+    const d=(s.xirr-s.benchXirr)*100;
+    const row=document.createElement('div'); row.className='xrow';
+    const bar=(v,c,lbl)=>{
+      const w=Math.abs(v)/(maxV-minV)*100;
+      const pos=v>=0? `left:${zero}%`:`left:${zero-w}%`;
+      return `<div class="bar"><span class="bl">${lbl}</span>
+        <span class="track"><i style="position:absolute;left:${zero}%;top:0;bottom:0;width:1px;background:#33403A"></i>
+        <span class="fill" style="background:${c};width:${w}%;${pos}"></span></span>
+        <span class="bv m num">${pct(v)}</span></div>`;
+    };
+    row.innerHTML=`<div class="top"><span class="xn">${name}</span>
+        <span class="bm">${bm? 'vs '+bm : 'vs Nifty + S&P blend'}</span>
+        <span class="chip ${d>=0?'up':'down'} delta m num">${d>=0?'+':''}${d.toFixed(1)} pp</span></div>
+      <div class="bars">${bar(s.xirr,color,'You')}${bar(s.benchXirr,'#57655E','Index')}</div>`;
+    wrap.appendChild(row);
+  }
+}
+
+/* ---------- alerts ---------- */
+function renderAlerts(){
+  const list=$('alerts'); list.innerHTML='';
+  for(const m of D.movers.slice(0,4)){
+    const row=document.createElement('div'); row.className='alert';
+    const d=new Date(m.date+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    row.innerHTML=`<span class="dt">${d}</span><span class="nm">${m.name}</span>
+      <span class="av m num">${cr(m.valueInr)} position</span>
+      <span class="chip ${m.pct>0?'up':'down'} num">${m.pct>0?'▲':'▼'} ${Math.abs(m.pct).toFixed(1)}%</span>`;
+    list.appendChild(row);
+  }
+  $('acount').textContent=D.moversCount||D.movers.length;
+  const m1=D.movers[0], m2=D.movers.find(m=>m.pct<0)||D.movers[1];
+  $('nf1t').textContent=`${m1.name} ${m1.pct>0?'▲':'▼'} ${Math.abs(m1.pct).toFixed(1)}% today`;
+  $('nf1b').textContent=`Your ${cr(m1.valueInr)} position moved ${sign(m1.pct)}${cr(Math.abs(m1.valueInr*m1.pct/100))}. Threshold ±4%.`;
+  $('nf2t').textContent=`${m2.name} ${m2.pct>0?'▲':'▼'} ${Math.abs(m2.pct).toFixed(1)}% `;
+  $('nf2b').textContent=`Your ${cr(m2.valueInr)} position moved ${sign(m2.pct)}${cr(Math.abs(m2.valueInr*m2.pct/100))}. Threshold ±4%.`;
+}
+
+/* ---------- holdings list ---------- */
+function renderHoldings(){
+  const wrap=$('holdings'); wrap.innerHTML='';
+  $('hcount').textContent=D.holdings.length+' positions';
+  for(const b of ['US','Gold','India','Crypto']){
+    const hs=D.holdings.filter(h=>h.bucket===b); if(!hs.length) continue;
+    const g=document.createElement('div'); g.className='grp';
+    g.innerHTML=`<i style="background:${BC[b]}"></i>${b}<span class="gv m">${cr(hs.reduce((a,h)=>a+h.valueInr,0))}</span>`;
+    wrap.appendChild(g);
+    for(const h of hs){
+      const r=document.createElement('div'); r.className='hrow';
+      r.innerHTML=`<div class="hl"><div class="hn">${h.name}</div>
+          <div class="hs">${h.qty%1?h.qty.toFixed(2):h.qty} ${h.type==='Gold'?'g':'units'} · ${h.sector}</div></div>
+        <div class="hr"><div class="hv m num">${cr(h.valueInr)}</div>
+          <div class="hd num"><span class="d ${h.dayPct>0.05?'up':h.dayPct<-0.05?'down':'flat'}">${h.dayPct>0?'+':''}${h.dayPct.toFixed(1)}%</span><span style="color:var(--muted)"> · XIRR ${h.xirr!=null?(h.xirr*100).toFixed(0)+'%':'—'}</span></div></div>`;
+      r.onclick=()=>openHolding(h.isin);
+      wrap.appendChild(r);
+    }
+  }
+}
+
+/* ---------- phone B : holding detail ---------- */
+let detRange='1Y';
+function openHolding(isin){
+  const h=D.holdings.find(x=>x.isin===isin)||D.holdings[0];
+  renderDetail(h);
+  document.querySelector('#tabB').closest('.phone').scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});
+}
+function renderDetail(h){
+  const st=D.stats[h.bucket];
+  const wrap=$('tabB');
+  const price=h.series.c[h.series.c.length-1];
+  wrap.innerHTML=`
+    <div class="backrow"><span class="bk">‹</span><span class="t">${h.name}</span><span class="tick">${h.yahoo}</span></div>
+    <div class="hero" style="margin-top:8px">
+      <div class="vrow"><div class="v m num" style="font-size:28px">${cr(h.valueInr)}</div></div>
+      <div style="margin-top:5px"><span class="chip ${h.dayPct>0?'up':h.dayPct<0?'down':'flat'} num">${h.dayPct>0?'+':''}${h.dayPct}% today</span></div>
+      <div class="sub m">${h.qty%1?h.qty.toFixed(3):h.qty} ${h.type==='Gold'?'grams':'units'} · ₹${inr.format(Math.round(price))} ${h.type==='Gold'?'/ gram':'each'}</div>
+    </div>
+    <div class="card">
+      <div class="chips" id="dranges"></div>
+      <svg id="dchart" width="100%" height="170" viewBox="0 0 321 170" preserveAspectRatio="none"></svg>
+      <div class="legend"><span><i style="border-color:${BC[h.bucket]}"></i>Price (₹)</span>
+        <span>▲ your buys</span></div>
+    </div>
+    <div class="statgrid">
+      <div class="sg"><div class="k">Invested</div><div class="v m num">${cr(h.investedInr)}</div></div>
+      <div class="sg"><div class="k">Value</div><div class="v m num">${cr(h.valueInr)}</div></div>
+      <div class="sg"><div class="k">Return</div><div class="v m num" style="color:${h.valueInr>=h.investedInr?'var(--good)':'var(--bad)'}">${pct(h.valueInr/h.investedInr-1)}</div></div>
+      <div class="sg"><div class="k">XIRR</div><div class="v m num">${h.xirr!=null?pct(h.xirr):'—'}</div></div>
+      <div class="sg"><div class="k">${st.benchmark}</div><div class="v m num" style="color:var(--muted)">${pct(st.benchXirr)}</div></div>
+      <div class="sg"><div class="k">Alert at</div><div class="v">±4% / day</div></div>
+    </div>
+    <div class="card">
+      <div class="head"><span class="label">Your trades</span><span class="rd" style="font-size:11px;color:var(--muted)">${h.trades.length}</span></div>
+      <div id="dtrades"></div>
+    </div>`;
+  // range chips
+  const rc=$('dranges');
+  for(const r of ['3M','1Y','All']){
+    const b=document.createElement('button'); b.className='rchip'+(r===detRange?' on':''); b.textContent=r;
+    b.onclick=()=>{ detRange=r; renderDetail(h); }; rc.appendChild(b);
+  }
+  // chart
+  const svg=$('dchart'); const W=321,H=170,padT=8,padB=18,padR=44;
+  const days={'3M':91,'1Y':365,'All':1e5}[detRange];
+  const endD=new Date(h.series.d[h.series.d.length-1]+'T00:00');
+  const cut=new Date(endD); cut.setDate(cut.getDate()-days);
+  const iso=cut.toISOString().slice(0,10);
+  let i0=h.series.d.findIndex(d=>d>=iso); if(i0<0)i0=0;
+  const ds=h.series.d.slice(i0), cs=h.series.c.slice(i0);
+  let lo=Math.min(...cs.filter(Boolean)), hi=Math.max(...cs); const span=hi-lo||1; lo-=span*.07; hi+=span*.07;
+  const X=i=>2+(W-2-padR)*i/Math.max(1,cs.length-1), Y=v=>padT+(H-padT-padB)*(1-(v-lo)/(hi-lo));
+  for(let g=0;g<3;g++){ const gv=lo+(hi-lo)*(g+1)/4, y=Y(gv);
+    svg.appendChild(el('line',{x1:2,x2:W-padR+4,y1:y,y2:y,stroke:'#1B2420'}));
+    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT}); t.textContent=inr.format(Math.round(gv)); t.classList.add('m'); svg.appendChild(t); }
+  let d=''; cs.forEach((v,i)=>{ if(v) d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
+  svg.appendChild(el('path',{d,fill:'none',stroke:BC[h.bucket],'stroke-width':2.2,'stroke-linejoin':'round'}));
+  // trade markers
+  for(const t of h.trades){
+    let i=ds.findIndex(x=>x>=t.date); if(i<0) continue;
+    const v=cs[i]; if(!v) continue;
+    const buy=t.side==='buy';
+    svg.appendChild(el('path',{d:`M${X(i)} ${Y(v)+(buy?7:-7)} l4 ${buy?6:-6} h-8 Z`,
+      fill:buy?BC[h.bucket]:'none',stroke:buy?'#0A0F0D':'var(--amber)','stroke-width':1}));
+  }
+  // trades list (latest first)
+  const tl=$('dtrades');
+  const sym=h.currency==='USD'?'$':'₹';   // trades store the broker's native price
+  [...h.trades].reverse().slice(0,8).forEach(t=>{
+    const row=document.createElement('div'); row.className='trow';
+    row.innerHTML=`<span class="td">${fdate(t.date).replace(' 20',' ’')}</span>
+      <span class="side ${t.side==='buy'?'b':'s'}">${t.side.toUpperCase()}</span>
+      <span class="tq m num">${t.qty%1?t.qty.toFixed(3):t.qty} @ ${sym}${inr.format(t.price)}</span>`;
+    tl.appendChild(row);
+  });
+  if(h.trades.length>8){ const more=document.createElement('div'); more.className='trow'; more.style.color='var(--muted)';
+    more.textContent=`+ ${h.trades.length-8} earlier trades`; tl.appendChild(more); }
+}
+
+/* ---------- boot ---------- */
+// ?flat unrolls the phone screens for full-length design review/screenshots
+if(location.search.includes('flat'))
+  document.querySelectorAll('.screen').forEach(s=>s.style.height='auto');
+function renderAll(){ renderHero(); renderTiles(); renderRanges(); renderChart(); renderAlloc(); }
+renderAll(); renderXirr(); renderAlerts(); renderHoldings();
+renderDetail(D.holdings.find(h=>h.isin==='US64110L1061')||D.holdings[0]);
+</script>
+</body>
+</html>
