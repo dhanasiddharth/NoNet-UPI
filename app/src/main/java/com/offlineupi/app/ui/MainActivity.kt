@@ -48,6 +48,14 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQ_CONTACTS)
         }
 
+        // ViewPager2's internal RecyclerView is focusable and steals focus from
+        // EditTexts inside pages (the pay dock's input ended up unfocused with
+        // the keyboard open). It never needs focus on a touch device.
+        (binding.tabPager.getChildAt(0) as? androidx.recyclerview.widget.RecyclerView)?.apply {
+            isFocusable = false
+            isFocusableInTouchMode = false
+        }
+
         binding.tabPager.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount() = tabOrder.size
             override fun createFragment(position: Int): Fragment = when (position) {

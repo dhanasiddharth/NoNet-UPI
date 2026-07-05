@@ -275,18 +275,24 @@ class HomeFragment : Fragment() {
         binding.etPayeeInput.imeOptions = EditorInfo.IME_ACTION_GO
         binding.btnKbToggle.text = "ABC"
         animateMorph(1f)
-        // Focus on the next frame, once the morph has given the field width, and
-        // show the IME via the insets controller — showSoftInput(SHOW_IMPLICIT)
-        // is allowed to no-op on an adjustNothing window, which intermittently
-        // left the keyboard closed or unfocused.
-        binding.etPayeeInput.post {
-            val b = _binding ?: return@post
-            b.etPayeeInput.requestFocus()
-            activity?.window?.let { w ->
-                WindowCompat.getInsetsController(w, b.etPayeeInput)
-                    .show(WindowInsetsCompat.Type.ime())
+        // requestFocus() refuses zero-sized views (targetSdk P+), and the input
+        // has width 0 until the morph grows it — so focus must wait for the
+        // first layout pass that gives the field real width. Only then show the
+        // IME, so the keyboard binds the field instead of a null editor.
+        binding.etPayeeInput.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                v: View, l: Int, t: Int, r: Int, b: Int,
+                ol: Int, ot: Int, or2: Int, ob: Int
+            ) {
+                if (v.width <= 0) return
+                v.removeOnLayoutChangeListener(this)
+                v.requestFocus()
+                activity?.window?.let { w ->
+                    WindowCompat.getInsetsController(w, v)
+                        .show(WindowInsetsCompat.Type.ime())
+                }
             }
-        }
+        })
     }
 
     private fun collapsePayeeInput() {
