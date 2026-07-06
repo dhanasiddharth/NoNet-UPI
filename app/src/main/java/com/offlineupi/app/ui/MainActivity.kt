@@ -39,7 +39,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        applySystemBarInsets(binding.root)
+        // bottom inset is consumed by the BottomNavigationView itself — padding
+        // the root too doubles the gap under the icons and leaves the gesture
+        // pill on the page background instead of the nav surface
+        applySystemBarInsets(binding.root, bottom = false)
 
         DailyBalanceCheckWorker.schedule(this)
         PriceSyncWorker.schedule(this)

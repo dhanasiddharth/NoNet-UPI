@@ -40,9 +40,10 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private var detail: HoldingDetail? = null
     private var range = "1Y"
-    private val ranges = listOf("1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
+    private val ranges = listOf("1D", "1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
     private val chartModes = listOf("Performance", "Value")
     private var chartMode = "Performance"
+    private var tradesExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +51,10 @@ class HoldingDetailActivity : AppCompatActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
         binding.btnBack.setOnClickListener { finish() }
+
+        binding.chart.onViewportChange = { s, e ->
+            detail?.let { updateWindowStats(it, s, e) }
+        }
 
         val isin = intent.getStringExtra("isin") ?: run { finish(); return }
         lifecycleScope.launch {
@@ -69,8 +74,6 @@ class HoldingDetailActivity : AppCompatActivity() {
         binding.tvSub.text = "${d.sector} · ${d.bucket.label} · vs ${d.bucket.benchName}"
         // hero is the position's worth (mockup layout); unit price lives in the qty chip
         binding.tvPrice.text = MoneyFmt.money(d.valueNow, ccy)
-        chip(binding.tvDayChip, if (abs(d.dayPct) < 0.005) null else d.dayPct > 0,
-            "${MoneyFmt.signedPct(d.dayPct)} today")
         val qtyTxt = if (d.qty == Math.floor(d.qty) && d.qty < 1e6) "%.0f".format(d.qty)
             else "%.4f".format(d.qty).trimEnd('0').trimEnd('.')
         val unit = if (d.instrument.isin == "GOLD") "g" else "u"
@@ -108,12 +111,45 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private fun startIndex(d: HoldingDetail): Int {
         val back = when (range) {
-            "1M" -> 30L; "3M" -> 91L; "6M" -> 182L
+            "1D" -> 1L; "1M" -> 30L; "3M" -> 91L; "6M" -> 182L
             "1Y" -> 365L; "3Y" -> 1095L; "5Y" -> 1826L
             else -> return 0
         }
         val i = d.days.indexOfFirst { it >= d.days.last() - back }
         return if (i < 0) 0 else i
+    }
+
+    /**
+     * Hero delta chip + chart stat follow whatever window is on screen — the
+     * selected range at first, then the panned window as the user drags.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun updateWindowStats(d: HoldingDetail, s: Int, e: Int) {
+        val n = d.days.size
+        fun spanPct(arr: DoubleArray): Double? {
+            val a = (s..e).firstOrNull { !arr[it].isNaN() && arr[it] > 0 }?.let { arr[it] } ?: return null
+            val b = (e downTo s).firstOrNull { !arr[it].isNaN() && arr[it] > 0 }?.let { arr[it] } ?: return null
+            return (b / a - 1) * 100
+        }
+        val move = spanPct(d.price)
+        val atLatest = e >= n - 1
+        val fmtD = DateTimeFormatter.ofPattern("d MMM")
+        val label = if (atLatest) range else
+            "${LocalDate.ofEpochDay(d.days[s]).format(fmtD)}–${LocalDate.ofEpochDay(d.days[e]).format(fmtD)}"
+        chip(binding.tvDayChip,
+            move?.let { if (abs(it) < 0.05) null else it > 0 },
+            "${move?.let { MoneyFmt.signedPct(it) } ?: "—"} · $label")
+
+        if (chartMode == "Performance") {
+            val gap = (move ?: 0.0) - (spanPct(d.bench) ?: 0.0)
+            binding.tvChartStat.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
+            binding.tvChartStat.setTextColor(getColor(
+                if (gap >= 0) R.color.accent_green else R.color.accent_red))
+        } else {
+            val vEnd = (e downTo s).firstOrNull { !d.value[it].isNaN() }?.let { d.value[it] }
+            binding.tvChartStat.text = MoneyFmt.money(vEnd ?: d.valueNow, ccy)
+            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
+        }
     }
 
     private fun renderChartModes() {
@@ -164,11 +200,6 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             val you = indexedFull(d.price)
             val bench = indexedFull(d.bench)
-            fun windowRel(arr: DoubleArray): Double? {
-                val b = (i0 until n).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
-                val e = (n - 1 downTo i0).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
-                return ((1 + e / 100) / (1 + b / 100) - 1) * 100
-            }
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.0f%%".format(it) }
             binding.chart.scrubFormatter = { idx, day, v ->
@@ -182,10 +213,6 @@ class HoldingDetailActivity : AppCompatActivity() {
                 LineChartView.Series(bench, PortfolioUi.MUTED_LINE, widthDp = 1.8f),
             ), d.days, dots, win, rebase = true)
             binding.tvChartLegend.text = "— price   — ${d.bucket.benchName}   ● trades"
-            val yNow = windowRel(you) ?: 0.0
-            val gap = yNow - (windowRel(bench) ?: 0.0)
-            binding.tvChartStat.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
-            binding.tvChartStat.setTextColor(getColor(if (gap >= 0) R.color.accent_green else R.color.accent_red))
         } else {
             binding.chart.allowNegative = false
             binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
@@ -200,9 +227,11 @@ class HoldingDetailActivity : AppCompatActivity() {
                 LineChartView.Series(d.invested, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
             ), d.days, dots, win, rebase = false)
             binding.tvChartLegend.text = "— value   ┈ invested   ● trades"
-            binding.tvChartStat.text = MoneyFmt.money(d.valueNow, ccy)
-            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
         }
+
+        // stats follow the chart's actual viewport (kept across lens switches)
+        val (vs, ve) = binding.chart.viewport()
+        updateWindowStats(d, vs, ve)
     }
 
     /** Rolling price-return chips (3M / 1Y / 3Y annualised) — mockup layout. */
@@ -331,7 +360,9 @@ class HoldingDetailActivity : AppCompatActivity() {
         val wrap = binding.layoutTrades
         wrap.removeAllViews()
         val fmt = DateTimeFormatter.ofPattern("d MMM yy")
-        for (t in d.trades.sortedByDescending { it.day }.take(10)) {
+        val shown = d.trades.sortedByDescending { it.day }
+            .let { if (tradesExpanded) it else it.take(10) }
+        for (t in shown) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -364,10 +395,17 @@ class HoldingDetailActivity : AppCompatActivity() {
         }
         if (d.trades.size > 10) {
             wrap.addView(TextView(this).apply {
-                text = "+ ${d.trades.size - 10} earlier"
-                setTextColor(getColor(R.color.text_secondary))
-                textSize = 11.5f
-                setPadding(0, dp(4), 0, 0)
+                text = if (tradesExpanded) "Show less ‹"
+                    else "View all ${d.trades.size} ›"
+                setTextColor(getColor(R.color.accent_emerald_light))
+                textSize = 12.5f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setBackgroundResource(R.drawable.ripple_group)
+                setPadding(0, dp(10), 0, dp(6))
+                setOnClickListener {
+                    tradesExpanded = !tradesExpanded
+                    detail?.let { renderTrades(it) }
+                }
             })
         }
     }

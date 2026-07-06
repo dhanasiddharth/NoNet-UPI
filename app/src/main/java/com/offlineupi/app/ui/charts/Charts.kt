@@ -68,6 +68,8 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     var allowNegative = false
     /** Crosshair label: absolute index + epoch day + displayed series[0] value. */
     var scrubFormatter: ((idx: Int, day: Long, value: Double) -> String)? = null
+    /** Fires as the user pans; screens update their stats to the visible window. */
+    var onViewportChange: ((startIdx: Int, endIdx: Int) -> Unit)? = null
 
     private var series: List<Series> = emptyList()
     private var dates: LongArray = LongArray(0)
@@ -128,6 +130,10 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     }
 
     private fun ok(v: Double) = if (allowNegative) !v.isNaN() else !v.isNaN() && v > 0
+
+    /** Currently visible [start, end] absolute indices. */
+    fun viewport(): Pair<Int, Int> =
+        if (n == 0) 0 to 0 else (winEnd - winSize) to (winEnd - 1)
 
     private val winStart get() = winEnd - winSize
     private fun plotW() = width - dp(44f)
@@ -290,7 +296,11 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
                 val shift = (panAccum / pxPerPt).toInt()
                 if (shift != 0) {
                     panAccum -= shift * pxPerPt
-                    winEnd = (winEnd + shift).coerceIn(winSize, n)
+                    val moved = (winEnd + shift).coerceIn(winSize, n)
+                    if (moved != winEnd) {
+                        winEnd = moved
+                        onViewportChange?.invoke(winStart, winEnd - 1)
+                    }
                     invalidate()
                 }
                 return true
