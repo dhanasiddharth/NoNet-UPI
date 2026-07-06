@@ -81,7 +81,7 @@ class TransactionHistoryActivity : AppCompatActivity() {
         filters.forEachIndexed { i, (_, status) ->
             val chip = binding.filterRow.getChildAt(i) as TextView
             val active = status == statusFilter
-            chip.setBackgroundResource(if (active) R.drawable.bg_pill_active else R.drawable.bg_input_pill)
+            chip.setBackgroundResource(if (active) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
             chip.setTextColor(getColor(if (active) R.color.accent_emerald_light else R.color.text_secondary))
         }
     }

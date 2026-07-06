@@ -75,7 +75,7 @@ class HoldingsActivity : AppCompatActivity() {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         gravity = Gravity.CENTER
         setPadding(dp(10), dp(5), dp(10), dp(5))
-        setBackgroundResource(if (active) R.drawable.bg_pill_active else R.drawable.bg_input_pill)
+        setBackgroundResource(if (active) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
         setTextColor(getColor(if (active) R.color.accent_emerald_light else R.color.text_secondary))
         setOnClickListener { onTap() }
     }

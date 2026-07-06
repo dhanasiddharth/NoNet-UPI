@@ -52,6 +52,8 @@ class PortfolioFragment : Fragment() {
     private var bucket: Bucket? = null
     private var compare = false
     private var masked = false
+    private var chartMode = "Value"
+    private val chartModes = listOf("Value", "Perf")
 
     companion object {
         // Survives tab swipes: ViewPager2 destroys the fragment view two tabs
@@ -98,13 +100,41 @@ class PortfolioFragment : Fragment() {
         binding.btnCompare.setOnClickListener {
             compare = !compare
             binding.btnCompare.setBackgroundResource(
-                if (compare) R.drawable.bg_pill_active else R.drawable.bg_input_pill
+                if (compare) R.drawable.bg_pill_selected else R.drawable.bg_input_pill
             )
             binding.btnCompare.setTextColor(
                 requireContext().getColor(if (compare) R.color.accent_emerald_light else R.color.text_secondary)
             )
             snapshot?.let { renderChart(it) }
         }
+        renderChartModePills()
+    }
+
+    /** Value ↔ Performance lens on the overview chart (same pattern as detail). */
+    private fun renderChartModePills() {
+        val wrap = binding.layoutChartMode
+        wrap.removeAllViews()
+        for (m in chartModes) {
+            val tv = TextView(requireContext()).apply {
+                text = m
+                textSize = 11.5f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                setBackgroundResource(if (m == chartMode) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
+                setTextColor(requireContext().getColor(
+                    if (m == chartMode) R.color.accent_emerald_light else R.color.text_secondary))
+                setOnClickListener {
+                    if (chartMode == m) return@setOnClickListener
+                    chartMode = m
+                    renderChartModePills()
+                    binding.btnCompare.visibility = if (m == "Perf") View.GONE else View.VISIBLE
+                    snapshot?.let { renderChart(it) }
+                }
+            }
+            wrap.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT).apply { if (m != chartModes.last()) marginEnd = dp(6) })
+        }
+        binding.btnCompare.visibility = if (chartMode == "Perf") View.GONE else View.VISIBLE
     }
 
     override fun onResume() {
@@ -370,7 +400,7 @@ class PortfolioFragment : Fragment() {
             ))
             tile.isSelected = bucket == b
             tile.setBackgroundResource(
-                if (bucket == b) R.drawable.bg_pill_active else R.drawable.bg_detail_group
+                if (bucket == b) R.drawable.bg_tile_selected else R.drawable.bg_detail_group
             )
             tile.setOnClickListener {
                 bucket = if (bucket == b) null else b
@@ -429,35 +459,86 @@ class PortfolioFragment : Fragment() {
         return i
     }
 
+    /** Value/invested/bench sources for whatever is focused (portfolio or a bucket). */
+    private fun chartSources(s: Snapshot): Triple<DoubleArray, DoubleArray, DoubleArray> {
+        val st = bucket?.let { s.buckets.getValue(it) }
+        return Triple(
+            st?.seriesNative ?: s.totalInr,
+            st?.investedNative ?: s.investedInr,
+            st?.benchNative ?: s.benchInr,
+        )
+    }
+
     @SuppressLint("SetTextI18n")
     private fun renderChart(s: Snapshot) {
         val i0 = startIndex(s)
-        val series = seriesFor(s)
+        val (series, investedSeries, benchSeries) = chartSources(s)
         val ccy = currencyFor()
-        val slice = series.copyOfRange(i0, series.size)
-        val lines = mutableListOf(
-            LineChartView.Series(slice, bucket?.let { bucketColors.getValue(it) } ?: brand, area = true)
-        )
-        var legend = if (bucket != null) "— ${bucket!!.label} value" else "— Portfolio value"
-        if (compare && bucket == null) {
-            lines += LineChartView.Series(
-                s.benchInr.copyOfRange(i0, s.benchInr.size), mutedLine, widthDp = 1.8f)
-            lines += LineChartView.Series(
-                s.investedInr.copyOfRange(i0, s.investedInr.size), mutedLine, widthDp = 1.4f, dashed = true)
-            legend = "— Portfolio   — Same money in index   ┈ Invested"
-        }
-        binding.chart.yFormatter = { money(it, ccy).removePrefix("₹").removePrefix("$") }
+        val color = bucket?.let { bucketColors.getValue(it) } ?: brand
         val fmt = DateTimeFormatter.ofPattern(if (range == "All") "MMM yy" else "MMM")
         val mid = (i0 + s.days.size - 1) / 2
-        binding.chart.set(lines, listOf(
+        val labels = listOf(
             LocalDate.ofEpochDay(s.days[i0]).format(fmt),
             LocalDate.ofEpochDay(s.days[mid]).format(fmt),
             LocalDate.ofEpochDay(s.days.last()).format(fmt),
-        ))
+        )
+
+        if (chartMode == "Perf") {
+            // time-weighted return: each day's growth is measured after backing
+            // out that day's contributions, so deposits/sells never move the line
+            val n = series.size
+            fun twr(values: DoubleArray): DoubleArray {
+                val out = DoubleArray(n - i0) { Double.NaN }
+                var level = 1.0
+                var prev = Double.NaN
+                for (j in 0 until n - i0) {
+                    val k = i0 + j
+                    val v = values[k]
+                    if (v.isNaN() || v <= 0) continue
+                    if (!prev.isNaN() && k > 0) {
+                        val base = prev + (investedSeries[k] - investedSeries[k - 1])
+                        if (base > 0) level *= v / base
+                    }
+                    prev = v
+                    out[j] = (level - 1) * 100
+                }
+                return out
+            }
+            val you = twr(series)
+            val bench = twr(benchSeries)
+            binding.chart.allowNegative = true
+            binding.chart.yFormatter = { "%.0f%%".format(it) }
+            binding.chart.set(listOf(
+                LineChartView.Series(you, color, area = true),
+                LineChartView.Series(bench, mutedLine, widthDp = 1.8f),
+            ), labels)
+            binding.tvLegend.text = "— return %, contributions stripped   — ${bucket?.benchName ?: "index"}"
+            val yNow = you.lastOrNull { !it.isNaN() } ?: 0.0
+            val gap = yNow - (bench.lastOrNull { !it.isNaN() } ?: 0.0)
+            binding.tvRangeValue.text = "${if (yNow >= 0) "+" else ""}${"%.1f".format(yNow)}%"
+            chip(binding.tvRangeChange, if (abs(gap) < 0.05) null else gap > 0,
+                "${if (gap >= 0) "+" else ""}${"%.1f".format(gap)} pts vs index")
+            binding.tvRangeMeta.text = range
+            return
+        }
+
+        val slice = series.copyOfRange(i0, series.size)
+        val lines = mutableListOf(LineChartView.Series(slice, color, area = true))
+        var legend = if (bucket != null) "— ${bucket!!.label} value" else "— Portfolio value"
+        if (compare) {
+            lines += LineChartView.Series(
+                benchSeries.copyOfRange(i0, benchSeries.size), mutedLine, widthDp = 1.8f)
+            lines += LineChartView.Series(
+                investedSeries.copyOfRange(i0, investedSeries.size), mutedLine, widthDp = 1.4f, dashed = true)
+            legend = "— ${bucket?.label ?: "Portfolio"}   — Same money in ${bucket?.benchName ?: "index"}   ┈ Invested"
+        }
+        binding.chart.allowNegative = false
+        binding.chart.yFormatter = { com.offlineupi.app.portfolio.MoneyFmt.axis(it, ccy) }
+        binding.chart.set(lines, labels)
         binding.tvLegend.text = legend
 
         val v = slice.last(); val v0 = slice.firstOrNull { it > 0 } ?: 1.0
-        val added = if (bucket == null) s.investedInr.last() - s.investedInr[i0] else 0.0
+        val added = investedSeries.last() - investedSeries[i0]
         val gain = v - v0 - added
         val base = v0 + added.coerceAtLeast(0.0)
         val gp = if (base > 0) gain / base else 0.0
@@ -465,7 +546,7 @@ class PortfolioFragment : Fragment() {
         chip(binding.tvRangeChange, if (abs(gp) < 1e-4) null else gain > 0,
             mask("${if (gain >= 0) "+" else "−"}${money(abs(gain), ccy)} · ${"%.1f".format(abs(gp) * 100)}%"))
         binding.tvRangeMeta.text =
-            if (bucket == null && added > 1000) "$range · added ${mask(inr(added))}" else range
+            if (added > 1000) "$range · added ${mask(money(added, ccy))}" else range
     }
 
     private fun renderDotPlot(s: Snapshot) {

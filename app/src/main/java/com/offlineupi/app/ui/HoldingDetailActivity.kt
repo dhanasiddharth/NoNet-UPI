@@ -40,7 +40,9 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private var detail: HoldingDetail? = null
     private var range = "1Y"
-    private val ranges = listOf("3M", "6M", "1Y", "3Y", "All")
+    private val ranges = listOf("1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
+    private val chartModes = listOf("Performance", "Value")
+    private var chartMode = "Performance"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,21 +67,20 @@ class HoldingDetailActivity : AppCompatActivity() {
     private fun render(d: HoldingDetail) {
         binding.tvName.text = d.instrument.name
         binding.tvSub.text = "${d.sector} · ${d.bucket.label} · vs ${d.bucket.benchName}"
-        binding.tvPrice.text = MoneyFmt.price(d.priceNow, ccy)
+        // hero is the position's worth (mockup layout); unit price lives in the qty chip
+        binding.tvPrice.text = MoneyFmt.money(d.valueNow, ccy)
         chip(binding.tvDayChip, if (abs(d.dayPct) < 0.005) null else d.dayPct > 0,
             "${MoneyFmt.signedPct(d.dayPct)} today")
-
         val qtyTxt = if (d.qty == Math.floor(d.qty) && d.qty < 1e6) "%.0f".format(d.qty)
             else "%.4f".format(d.qty).trimEnd('0').trimEnd('.')
-        val avg = if (d.qty > 0) d.investedNow / d.qty else 0.0
-        binding.tvPosition.text =
-            "$qtyTxt units · avg ${MoneyFmt.price(avg, ccy)} · in ${MoneyFmt.money(d.investedNow, ccy)}"
+        val unit = if (d.instrument.isin == "GOLD") "g" else "u"
+        binding.tvQtyChip.text = "$qtyTxt $unit · ${MoneyFmt.price(d.priceNow, ccy)}"
 
         renderRanges()
-        renderCharts(d)
+        renderChartModes()
+        renderChart(d)
         renderReturns(d)
         renderStats(d)
-        renderAlertRule(d)
         renderTrades(d)
     }
 
@@ -93,11 +94,11 @@ class HoldingDetailActivity : AppCompatActivity() {
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 gravity = Gravity.CENTER
                 setPadding(0, dp(5), 0, dp(5))
-                setBackgroundResource(if (r == range) R.drawable.bg_pill_active else R.drawable.bg_input_pill)
+                setBackgroundResource(if (r == range) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
                 setTextColor(getColor(if (r == range) R.color.accent_emerald_light else R.color.text_secondary))
                 setOnClickListener {
                     range = r
-                    detail?.let { d -> renderRanges(); renderCharts(d) }
+                    detail?.let { d -> renderRanges(); renderChart(d) }
                 }
             }
             wrap.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -107,188 +108,213 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private fun startIndex(d: HoldingDetail): Int {
         val back = when (range) {
-            "3M" -> 91L; "6M" -> 182L; "1Y" -> 365L; "3Y" -> 1095L
+            "1M" -> 30L; "3M" -> 91L; "6M" -> 182L
+            "1Y" -> 365L; "3Y" -> 1095L; "5Y" -> 1826L
             else -> return 0
         }
         val i = d.days.indexOfFirst { it >= d.days.last() - back }
         return if (i < 0) 0 else i
     }
 
+    private fun renderChartModes() {
+        val wrap = binding.layoutChartModes
+        wrap.removeAllViews()
+        for (m in chartModes) {
+            val tv = TextView(this).apply {
+                text = m
+                textSize = 12f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(5), 0, dp(5))
+                setBackgroundResource(if (m == chartMode) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
+                setTextColor(getColor(if (m == chartMode) R.color.accent_emerald_light else R.color.text_secondary))
+                setOnClickListener {
+                    if (chartMode == m) return@setOnClickListener
+                    chartMode = m
+                    detail?.let { d -> renderChartModes(); renderChart(d) }
+                }
+            }
+            wrap.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { if (m != chartModes.last()) marginEnd = dp(6) })
+        }
+    }
+
+    /** One chart, two lenses: performance strips contributions; value shows them. */
     @SuppressLint("SetTextI18n")
-    private fun renderCharts(d: HoldingDetail) {
+    private fun renderChart(d: HoldingDetail) {
         val i0 = startIndex(d)
         val n = d.days.size
-
-        // ---- performance: value ÷ invested vs bench-sim ÷ invested, % ----
-        fun perfOf(values: DoubleArray) = DoubleArray(n - i0) { j ->
-            val k = i0 + j
-            val inv = d.invested[k]
-            if (inv > 0 && !values[k].isNaN()) (values[k] / inv - 1) * 100 else Double.NaN
-        }
-        val you = perfOf(d.value)
-        val bench = perfOf(d.benchValue)
-        binding.chartPerf.allowNegative = true
-        binding.chartPerf.yFormatter = { "%.0f%%".format(it) }
         val fmt = DateTimeFormatter.ofPattern(if (range == "All" || range == "3Y") "MMM yy" else "MMM")
         val labels = listOf(
             LocalDate.ofEpochDay(d.days[i0]).format(fmt),
             LocalDate.ofEpochDay(d.days[(i0 + n - 1) / 2]).format(fmt),
             LocalDate.ofEpochDay(d.days.last()).format(fmt),
         )
-        binding.chartPerf.set(listOf(
-            LineChartView.Series(you, color, area = true),
-            LineChartView.Series(bench, PortfolioUi.MUTED_LINE, widthDp = 1.8f),
-        ), labels)
-        binding.tvPerfLegend.text = "— ${d.instrument.name.take(18)}   — same cashflows in ${d.bucket.benchName}"
 
-        val gap = (you.lastOrNull { !it.isNaN() } ?: 0.0) - (bench.lastOrNull { !it.isNaN() } ?: 0.0)
-        binding.tvPerfGap.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
-        binding.tvPerfGap.setTextColor(getColor(if (gap >= 0) R.color.accent_green else R.color.accent_red))
-
-        // ---- value chart with trade dots ----
-        val valueSlice = DoubleArray(n - i0) { j -> d.value[i0 + j] }
-        val investedSlice = DoubleArray(n - i0) { j -> d.invested[i0 + j] }
-        val dots = d.tradeDots.filter { it.idx >= i0 && !d.value[it.idx].isNaN() }
-            .map { (it.idx - i0) to d.value[it.idx] }
-        binding.chartValue.allowNegative = false
-        binding.chartValue.yFormatter = {
-            MoneyFmt.money(it, ccy).removePrefix("₹").removePrefix("$")
+        if (chartMode == "Performance") {
+            // pure price performance, indexed from the range start — buys and
+            // sells never move these lines, only market moves do
+            fun indexed(series: DoubleArray): DoubleArray {
+                var base = Double.NaN
+                var k = i0
+                while (k < n && (series[k].isNaN() || series[k] <= 0)) k++
+                if (k < n) base = series[k]
+                return DoubleArray(n - i0) { j ->
+                    val v = series[i0 + j]
+                    if (v.isNaN() || base.isNaN() || base <= 0) Double.NaN else (v / base - 1) * 100
+                }
+            }
+            val you = indexed(d.price)
+            val bench = indexed(d.bench)
+            // trade markers ride the price line: entry/exit timing vs the market
+            val dots = d.tradeDots.filter { it.idx >= i0 }
+                .map { (it.idx - i0) to you[it.idx - i0] }
+                .filter { !it.second.isNaN() }
+            binding.chart.allowNegative = true
+            binding.chart.yFormatter = { "%.0f%%".format(it) }
+            binding.chart.set(listOf(
+                LineChartView.Series(you, color, area = true),
+                LineChartView.Series(bench, PortfolioUi.MUTED_LINE, widthDp = 1.8f),
+            ), labels, dots)
+            binding.tvChartLegend.text = "— price   — ${d.bucket.benchName}   ● trades"
+            val gap = (you.lastOrNull { !it.isNaN() } ?: 0.0) - (bench.lastOrNull { !it.isNaN() } ?: 0.0)
+            binding.tvChartStat.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
+            binding.tvChartStat.setTextColor(getColor(if (gap >= 0) R.color.accent_green else R.color.accent_red))
+        } else {
+            val valueSlice = DoubleArray(n - i0) { j -> d.value[i0 + j] }
+            val investedSlice = DoubleArray(n - i0) { j -> d.invested[i0 + j] }
+            val dots = d.tradeDots.filter { it.idx >= i0 && !d.value[it.idx].isNaN() }
+                .map { (it.idx - i0) to d.value[it.idx] }
+            binding.chart.allowNegative = false
+            binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
+            binding.chart.set(listOf(
+                LineChartView.Series(valueSlice, color, area = true),
+                LineChartView.Series(investedSlice, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
+            ), labels, dots)
+            binding.tvChartLegend.text = "— value   ┈ invested   ● trades"
+            binding.tvChartStat.text = MoneyFmt.money(d.valueNow, ccy)
+            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
         }
-        binding.chartValue.set(listOf(
-            LineChartView.Series(valueSlice, color, area = true),
-            LineChartView.Series(investedSlice, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
-        ), labels, dots)
-        binding.tvValueLegend.text = "— value   ┈ invested   ● trades"
-        binding.tvValueNow.text = MoneyFmt.money(d.valueNow, ccy)
     }
 
+    /** Rolling price-return chips (3M / 1Y / 3Y annualised) — mockup layout. */
     @SuppressLint("SetTextI18n")
     private fun renderReturns(d: HoldingDetail) {
         val wrap = binding.layoutReturns
         wrap.removeAllViews()
-        for ((label, you, bench) in d.trailing) {
-            if (you == null && bench == null) continue
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(7), 0, dp(7))
-            }
-            row.addView(TextView(this).apply {
-                text = label
-                setTextColor(getColor(R.color.text_secondary))
+        val wanted = listOf("3M", "1Y", "3Y")
+        for (label in wanted) {
+            val t = d.trailing.firstOrNull { it.first == label } ?: continue
+            val you = t.second
+            val annualised = if (label == "3Y" && you != null)
+                Math.pow(1 + you, 1.0 / 3) - 1 else you
+            val txt = "$label ${MoneyFmt.pct(annualised)}" + if (label == "3Y" && you != null) "/yr" else ""
+            wrap.addView(TextView(this).apply {
+                text = txt
                 textSize = 12f
-            }, LinearLayout.LayoutParams(dp(40), ViewGroup.LayoutParams.WRAP_CONTENT))
-            row.addView(TextView(this).apply {
-                text = MoneyFmt.pct(you)
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setPadding(dp(10), dp(4), dp(10), dp(4))
                 setTextColor(getColor(when {
-                    you == null -> R.color.text_secondary
-                    you >= 0 -> R.color.accent_green
+                    annualised == null -> R.color.text_secondary
+                    annualised >= 0 -> R.color.accent_green
                     else -> R.color.accent_red
                 }))
-                textSize = 13f
-                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(TextView(this).apply {
-                text = "${d.bucket.benchName} ${MoneyFmt.pct(bench)}"
-                setTextColor(getColor(R.color.text_secondary))
-                textSize = 12f
+                setBackgroundResource(R.drawable.bg_input_pill)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(10) })
-            val delta = if (you != null && bench != null) you - bench else null
-            row.addView(TextView(this).apply {
-                text = delta?.let { "${if (it >= 0) "+" else ""}%.1f".format(it * 100) } ?: "—"
-                textSize = 11.5f
-                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                setPadding(dp(8), dp(2), dp(8), dp(2))
-                setTextColor(getColor(when {
-                    delta == null -> R.color.text_secondary
-                    delta >= 0 -> R.color.accent_green
-                    else -> R.color.accent_red
-                }))
-                setBackgroundResource(when {
-                    delta == null -> R.drawable.bg_input_pill
-                    delta >= 0 -> R.drawable.bg_chip_verified
-                    else -> R.drawable.bg_chip_failed
-                })
-            })
-            wrap.addView(row)
+                ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(8) })
         }
     }
 
+    /** 3-column stat tiles (mockup's statgrid): headline numbers + the alert rule. */
     @SuppressLint("SetTextI18n")
     private fun renderStats(d: HoldingDetail) {
         val wrap = binding.layoutStats
         wrap.removeAllViews()
-        val gain = d.valueNow - d.investedNow
-        val gainPct = if (d.investedNow > 0) gain / d.investedNow else 0.0
-        val items = listOf(
-            "Value" to MoneyFmt.money(d.valueNow, ccy),
-            "Invested" to MoneyFmt.money(d.investedNow, ccy),
-            "Gain" to "${MoneyFmt.money(gain, ccy)} (${MoneyFmt.pct(gainPct)})",
-            "XIRR" to MoneyFmt.pct(d.xirr),
-            "${d.bucket.benchName} XIRR" to MoneyFmt.pct(d.benchXirr),
-            "Inflation (${d.bucket.cpi} CPI)" to MoneyFmt.pct(d.inflXirr),
-        )
-        for ((label, value) in items) {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(6), 0, dp(6))
-            }
-            row.addView(TextView(this).apply {
-                text = label
-                setTextColor(getColor(R.color.text_secondary))
-                textSize = 12.5f
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(TextView(this).apply {
-                text = value
-                setTextColor(getColor(R.color.text_primary))
-                textSize = 12.5f
-                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                gravity = Gravity.END
-            })
-            wrap.addView(row)
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun renderAlertRule(d: HoldingDetail) {
+        val dIdx = if (d.xirr != null && d.benchXirr != null) (d.xirr - d.benchXirr) * 100 else null
+        val dInf = if (d.xirr != null && d.inflXirr != null) (d.xirr - d.inflXirr) * 100 else null
         val rules = db.alertRules()
         val own = rules["isin:${d.instrument.isin}"]
-        val bucketRule = rules["bucket:${d.bucket.name}"]
-        val def = rules["default"] ?: PriceSyncWorker.DEFAULT_THRESHOLD
-        val (pct, source) = when {
-            own != null -> own to "this holding"
-            bucketRule != null -> bucketRule to d.bucket.label
-            else -> def to "default"
-        }
-        binding.tvAlertRule.text = "±${trim(pct)}% · $source"
-        binding.rowAlert.setOnClickListener {
-            val input = EditText(this).apply {
-                hint = "e.g. 3.5"
-                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-                setText(if (own != null) trim(own) else "")
+        val alertPct = own ?: rules["bucket:${d.bucket.name}"] ?: rules["default"]
+            ?: PriceSyncWorker.DEFAULT_THRESHOLD
+
+        data class Cell(val k: String, val v: String, val color: Int?, val onTap: (() -> Unit)?)
+        fun pp(v: Double?) = v?.let { "${if (it >= 0) "+" else ""}%.1f pp".format(it) } ?: "—"
+        val cells = listOf(
+            Cell("Invested", MoneyFmt.money(d.investedNow, ccy), null, null),
+            Cell("Value", MoneyFmt.money(d.valueNow, ccy), null, null),
+            Cell("XIRR", MoneyFmt.pct(d.xirr), null, null),
+            Cell("vs ${d.bucket.benchName}", pp(dIdx),
+                dIdx?.let { getColor(if (it >= 0) R.color.accent_green else R.color.accent_red) }, null),
+            Cell("vs ${d.bucket.cpi} CPI", pp(dInf),
+                dInf?.let { getColor(if (it >= 0) R.color.accent_green else R.color.accent_red) }, null),
+            Cell("Alert at", "±${trim(alertPct)}%", null) { promptAlertRule(d) },
+        )
+        cells.chunked(3).forEach { rowCells ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                weightSum = 3f
             }
-            val box = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(10), dp(20), 0)
-                addView(input)
+            rowCells.forEachIndexed { i, c ->
+                val tile = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setBackgroundResource(R.drawable.bg_detail_group)
+                    setPadding(dp(10), dp(9), dp(10), dp(9))
+                    c.onTap?.let { tap -> setOnClickListener { tap() } }
+                }
+                tile.addView(TextView(this).apply {
+                    text = c.k.uppercase()
+                    textSize = 9.5f
+                    letterSpacing = 0.06f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    setTextColor(getColor(R.color.text_secondary))
+                    maxLines = 1
+                })
+                tile.addView(TextView(this).apply {
+                    text = c.v
+                    textSize = 13.5f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    setTextColor(c.color ?: getColor(R.color.text_primary))
+                    maxLines = 1
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
+                row.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { if (i < rowCells.size - 1) marginEnd = dp(8) })
             }
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Alert when ${d.instrument.name} moves beyond ±%")
-                .setView(box)
-                .setPositiveButton("Save") { _, _ ->
-                    input.text.toString().toDoubleOrNull()?.let { v ->
-                        db.setAlertRule("isin:${d.instrument.isin}", v)
-                        renderAlertRule(d)
-                    }
-                }
-                .setNeutralButton("Use ${d.bucket.label}/default") { _, _ ->
-                    db.setAlertRule("isin:${d.instrument.isin}", null)
-                    renderAlertRule(d)
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+            binding.layoutStats.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dp(8) })
         }
+        // keep column widths when the last row is short
+        wrap.requestLayout()
+    }
+
+    private fun promptAlertRule(d: HoldingDetail) {
+        val own = db.alertRules()["isin:${d.instrument.isin}"]
+        val input = EditText(this).apply {
+            hint = "e.g. 3.5"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(if (own != null) trim(own) else "")
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Alert when ${d.instrument.name} moves beyond ±%")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                input.text.toString().toDoubleOrNull()?.let { v ->
+                    db.setAlertRule("isin:${d.instrument.isin}", v)
+                    detail?.let { renderStats(it) }
+                }
+            }
+            .setNeutralButton("Use ${d.bucket.label}/default") { _, _ ->
+                db.setAlertRule("isin:${d.instrument.isin}", null)
+                detail?.let { renderStats(it) }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     @SuppressLint("SetTextI18n")

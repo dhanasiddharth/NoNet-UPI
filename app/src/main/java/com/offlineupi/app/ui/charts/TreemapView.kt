@@ -9,7 +9,6 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.core.content.ContextCompat
@@ -167,7 +166,9 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
         for (i in nodes.indices) {
             val r = rects.getOrNull(i) ?: continue
             val n = nodes[i]
-            fill.color = n.color
+            // fills sit 25% toward the surface: hue identity stays, and the
+            // white labels clear contrast on every bucket color
+            fill.color = mix(n.color, 0xFF121A15.toInt(), 0.25f)
             canvas.drawRoundRect(
                 r.left + gap, r.top + gap, r.right - gap, r.bottom - gap, dp(3f), dp(3f), fill
             )
@@ -176,10 +177,26 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
         canvas.restoreToCount(save)
     }
 
+    /**
+     * Tiered labels: roomy blocks wrap the name and show % + amount at a
+     * larger size; medium blocks get one line + %; small ones just the name.
+     */
     private fun drawLabels(canvas: Canvas, r: RectF, n: Node, total: Double) {
         val w = r.width(); val h = r.height()
         val pctTxt = "%.1f%%".format(n.value / total * 100)
         when {
+            w > dp(150f) && h > dp(100f) -> {
+                labelPaint.textSize = dp(14f)
+                var y = r.top + dp(22f)
+                for (line in wrapText(n.label, labelPaint, w - dp(20f), 2)) {
+                    canvas.drawText(line, r.left + dp(10f), y, labelPaint)
+                    y += dp(18f)
+                }
+                labelPaint.textSize = dp(16f)
+                canvas.drawText(pctTxt, r.left + dp(10f), y + dp(6f), labelPaint)
+                subPaint.textSize = dp(12f)
+                canvas.drawText(n.amount, r.left + dp(10f), r.bottom - dp(10f), subPaint)
+            }
             w > dp(96f) && h > dp(58f) -> {
                 labelPaint.textSize = dp(12.5f)
                 subPaint.textSize = dp(10.5f)
@@ -207,29 +224,32 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
         return s.substring(0, cut) + "…"
     }
 
-    // ---- gestures: tap drills, pinch out drills, pinch in goes up ----
-    private var scaling = false
+    /** Greedy word wrap into at most [maxLines]; the last line ellipsizes. */
+    private fun wrapText(s: String, p: Paint, maxW: Float, maxLines: Int): List<String> {
+        if (p.measureText(s) <= maxW) return listOf(s)
+        val words = s.split(' ').filter { it.isNotEmpty() }
+        val lines = mutableListOf<String>()
+        var i = 0
+        while (i < words.size && lines.size < maxLines) {
+            if (lines.size == maxLines - 1) {
+                lines.add(ellipsize(words.subList(i, words.size).joinToString(" "), p, maxW))
+                return lines
+            }
+            var cur = words[i]; i++
+            while (i < words.size && p.measureText("$cur ${words[i]}") <= maxW) {
+                cur += " " + words[i]; i++
+            }
+            lines.add(ellipsize(cur, p, maxW))
+        }
+        return lines
+    }
 
+    // ---- gestures: tap drills; zooming out is back/up (rotate for fullscreen) ----
     private val tapDetector = GestureDetector(context,
         object : GestureDetector.SimpleOnGestureListener() {
             override fun onSingleTapUp(e: MotionEvent): Boolean {
                 nodeAt(e.x, e.y)?.let { drillInto(it) }
                 return true
-            }
-        })
-
-    private val scaleDetector = ScaleGestureDetector(context,
-        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            private var focalX = 0f; private var focalY = 0f
-            override fun onScaleBegin(d: ScaleGestureDetector): Boolean {
-                scaling = true; focalX = d.focusX; focalY = d.focusY
-                return true
-            }
-            override fun onScaleEnd(d: ScaleGestureDetector) {
-                scaling = false
-                if (d.scaleFactor > 1.15f) nodeAt(focalX, focalY)
-                    ?.takeIf { it.children.isNotEmpty() }?.let { drillInto(it) }
-                else if (d.scaleFactor < 0.87f) up()
             }
         })
 
@@ -239,8 +259,7 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        scaleDetector.onTouchEvent(event)
-        if (!scaling) tapDetector.onTouchEvent(event)
+        tapDetector.onTouchEvent(event)
         return true
     }
 
@@ -249,14 +268,16 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
     private fun dp(v: Float) = v * resources.displayMetrics.density
 
     companion object {
+        fun mix(a: Int, b: Int, f: Float): Int {
+            fun ch(shift: Int) = (((a shr shift and 0xFF) * (1 - f)) +
+                ((b shr shift and 0xFF) * f)).toInt()
+            return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+        }
+
         /** Shade a base color toward the surface for depth-ranked children. */
         fun shade(base: Int, rank: Int, count: Int): Int {
             if (count <= 1) return base
-            val f = 0.38f * rank / (count - 1)      // 0 → 38% toward dark surface
-            val surface = 0xFF101713.toInt()
-            fun ch(shift: Int) = (((base shr shift and 0xFF) * (1 - f)) +
-                ((surface shr shift and 0xFF) * f)).toInt()
-            return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+            return mix(base, 0xFF101713.toInt(), 0.38f * rank / (count - 1))
         }
     }
 }

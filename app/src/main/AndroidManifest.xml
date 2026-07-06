@@ -63,10 +63,10 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- Rotates: landscape gives the treemap the whole screen -->
         <activity
             android:name=".ui.AllocationActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+            android:exported="false" />
 
         <activity
             android:name=".ui.HoldingsActivity"

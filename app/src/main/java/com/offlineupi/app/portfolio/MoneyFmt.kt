@@ -30,6 +30,21 @@ object MoneyFmt {
         (if (currency == "USD") "$" else "₹") +
             String.format(if (currency == "USD") Locale.US else Locale("en", "IN"), "%,.2f", v)
 
+    /** Chart-axis labels: always one compact token, never a full comma number. */
+    fun axis(v: Double, currency: String): String {
+        val a = abs(v)
+        return if (currency == "USD") when {
+            a >= 1e6 -> "%.1fM".format(v / 1e6)
+            a >= 1e3 -> "%.0fk".format(v / 1e3)
+            else -> "%.0f".format(v)
+        } else when {
+            a >= 1e7 -> "%.1f Cr".format(v / 1e7)
+            a >= 1e5 -> "%.1f L".format(v / 1e5)
+            a >= 1e3 -> "%.0fk".format(v / 1e3)
+            else -> "%.0f".format(v)
+        }
+    }
+
     /** Fractional rate (0.12 → +12.0%). */
     fun pct(v: Double?): String =
         v?.let { (if (it >= 0) "+" else "") + "%.1f%%".format(it * 100) } ?: "—"

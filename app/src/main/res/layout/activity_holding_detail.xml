@@ -57,19 +57,19 @@
             android:paddingTop="14dp"
             android:paddingBottom="28dp">
 
+            <TextView
+                android:id="@+id/tvPrice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="27sp"
+                android:textStyle="bold"
+                android:letterSpacing="-0.02" />
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
-                <TextView
-                    android:id="@+id/tvPrice"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/text_primary"
-                    android:textSize="26sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="-0.02" />
+                android:layout_marginTop="6dp">
                 <TextView
                     android:id="@+id/tvDayChip"
                     android:layout_width="wrap_content"
@@ -77,16 +77,19 @@
                     android:textSize="12sp"
                     android:textStyle="bold"
                     android:paddingHorizontal="9dp"
+                    android:paddingVertical="3dp" />
+                <TextView
+                    android:id="@+id/tvQtyChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_secondary"
+                    android:background="@drawable/bg_input_pill"
+                    android:paddingHorizontal="9dp"
                     android:paddingVertical="3dp"
-                    android:layout_marginStart="10dp" />
+                    android:layout_marginStart="6dp" />
             </LinearLayout>
-            <TextView
-                android:id="@+id/tvPosition"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                android:textSize="12.5sp"
-                android:layout_marginTop="4dp" />
 
             <LinearLayout
                 android:id="@+id/layoutRanges"
@@ -96,83 +99,43 @@
                 android:layout_marginTop="14dp" />
 
             <LinearLayout
+                android:id="@+id/layoutChartModes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="20dp">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="PERFORMANCE VS BENCHMARK"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.1" />
-                <TextView
-                    android:id="@+id/tvPerfGap"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                android:layout_marginTop="18dp" />
             <com.offlineupi.app.ui.charts.LineChartView
-                android:id="@+id/chartPerf"
+                android:id="@+id/chart"
                 android:layout_width="match_parent"
-                android:layout_height="170dp"
-                android:layout_marginTop="8dp" />
-            <TextView
-                android:id="@+id/tvPerfLegend"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
-
-            <View style="@style/PortfolioDivider" />
-
+                android:layout_height="190dp"
+                android:layout_marginTop="10dp" />
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:layout_marginTop="4dp">
                 <TextView
+                    android:id="@+id/tvChartLegend"
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:text="VALUE"
                     android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.1" />
+                    android:textSize="11sp" />
                 <TextView
-                    android:id="@+id/tvValueNow"
+                    android:id="@+id/tvChartStat"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
+                    android:textSize="12.5sp"
                     android:textStyle="bold" />
             </LinearLayout>
-            <com.offlineupi.app.ui.charts.LineChartView
-                android:id="@+id/chartValue"
-                android:layout_width="match_parent"
-                android:layout_height="170dp"
-                android:layout_marginTop="8dp" />
-            <TextView
-                android:id="@+id/tvValueLegend"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
 
             <View style="@style/PortfolioDivider" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="TRAILING RETURNS"
+                android:text="ROLLING PRICE RETURN"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp"
                 android:textStyle="bold"
@@ -181,8 +144,8 @@
                 android:id="@+id/layoutReturns"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginTop="4dp" />
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp" />
 
             <View style="@style/PortfolioDivider" />
 
@@ -199,38 +162,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="4dp" />
-
-            <View style="@style/PortfolioDivider" />
-
-            <LinearLayout
-                android:id="@+id/rowAlert"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/ripple_group"
-                android:paddingVertical="6dp">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="MOVEMENT ALERT"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.1" />
-                <TextView
-                    android:id="@+id/tvAlertRule"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/text_primary"
-                    android:textSize="12.5sp"
-                    android:textStyle="bold"
-                    android:background="@drawable/bg_input_pill"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp" />
-            </LinearLayout>
+                android:layout_marginTop="8dp" />
 
             <View style="@style/PortfolioDivider" />
 

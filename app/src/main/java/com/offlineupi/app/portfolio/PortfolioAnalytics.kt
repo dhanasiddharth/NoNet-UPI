@@ -52,7 +52,9 @@ object PortfolioAnalytics {
 
     data class BucketStat(
         val bucket: Bucket,
-        val seriesNative: DoubleArray,   // daily value in the bucket's currency
+        val seriesNative: DoubleArray,     // daily value in the bucket's currency
+        val investedNative: DoubleArray,   // cumulative net contributions
+        val benchNative: DoubleArray,      // same cashflows in the bucket's index
         val value: Double, val invested: Double, val valueInr: Double,
         val xirr: Double?, val benchXirr: Double?, val inflXirr: Double?,
         val dayPct: Double,
@@ -89,6 +91,31 @@ object PortfolioAnalytics {
 
     /** Last computed snapshot — sub-screens reuse it instead of recomputing. */
     @Volatile var cached: Snapshot? = null
+
+    /**
+     * Share classes of one company report as a single position. Generic rule:
+     * instruments whose names collapse to the same key after stripping share-
+     * class designators ("Class A", "Cl C", trailing "-A") — same currency —
+     * are one company. GOOG/GOOGL both arrive as "Google", so they fold.
+     */
+    fun classKey(i: Instrument): String {
+        val base = i.name.lowercase()
+            .replace(Regex("\\b(class|cl)\\s*[a-c]\\b"), " ")
+            .replace(Regex("[-·]\\s*[a-c]$"), " ")
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+        return "${i.currency}:$base"
+    }
+
+    fun classGroup(inst: Instrument, all: Collection<Instrument>): List<Instrument> {
+        val key = classKey(inst)
+        return listOf(inst) + all.filter { it.isin != inst.isin && classKey(it) == key }
+    }
+
+    /** "Google (GOOG+GOOGL)" — only when there really are multiple classes. */
+    fun mergedName(group: List<Instrument>): String =
+        if (group.size < 2) group.first().name
+        else "${group.first().name} (${group.map { it.yahoo }.sorted().joinToString("+")})"
 
     fun compute(db: PortfolioDb, moverThresholdPct: Double = 4.0): Snapshot? {
         val instruments = db.instruments().associateBy { it.isin }
@@ -232,30 +259,31 @@ object PortfolioAnalytics {
         val bucketStats = Bucket.entries.associateWith { b ->
             val flows = flowsNatB.getValue(b).sortedBy { it.first }
             var units = 0.0; var fi = 0
-            var benchTerminal = 0.0
-            val sortedFlows = flows
+            val benchNative = DoubleArray(n)
             for (k in 0 until n) {
-                while (fi < sortedFlows.size && sortedFlows[fi].first == k) {
+                while (fi < flows.size && flows[fi].first == k) {
                     val ref = px[b.benchSymbol]?.get(k) ?: Double.NaN
-                    if (!ref.isNaN() && ref > 0) units += sortedFlows[fi].second / ref
+                    if (!ref.isNaN() && ref > 0) units += flows[fi].second / ref
                     fi++
                 }
-                if (k == last) benchTerminal = units * (px[b.benchSymbol]?.get(k) ?: 0.0).orZero()
+                benchNative[k] = units * (px[b.benchSymbol]?.get(k) ?: 0.0).orZero()
             }
             val cur = valueNatB.getValue(b)[last]
             BucketStat(
                 bucket = b, seriesNative = valueNatB.getValue(b),
+                investedNative = investedNatB.getValue(b),
+                benchNative = benchNative,
                 value = cur, invested = investedNatB.getValue(b)[last],
                 valueInr = valueInrB.getValue(b)[last],
                 xirr = xirr(flows, cur),
-                benchXirr = xirr(flows, benchTerminal),
+                benchXirr = xirr(flows, benchNative[last]),
                 inflXirr = xirr(flows, inflationTerminal(flows, b.cpi)),
                 dayPct = dayChange(valueNatB.getValue(b)),
             )
         }
 
         // ---- holdings ----
-        val holdings = qty.mapNotNull { (isin, qarr) ->
+        val holdingsRaw = qty.mapNotNull { (isin, qarr) ->
             val q = qarr[last]
             if (q <= 1e-9) return@mapNotNull null
             val inst = instruments[isin] ?: return@mapNotNull null
@@ -280,6 +308,33 @@ object PortfolioAnalytics {
                 spark = spark,
             )
         }.sortedByDescending { it.valueInr }
+
+        // ---- fold share classes of one company into a single position ----
+        val holdings = run {
+            val byKey = holdingsRaw.groupBy { classKey(it.instrument) }
+            holdingsRaw.mapNotNull { h ->
+                val g = byKey.getValue(classKey(h.instrument))
+                if (g.size == 1) return@mapNotNull h
+                val primary = g.maxBy { it.valueInr }
+                if (h !== primary) return@mapNotNull null
+                val flows = g.flatMap { flowsNatByIsin[it.instrument.isin].orEmpty() }
+                    .sortedBy { it.first }
+                val value = g.sumOf { it.value }
+                val qtySum = g.sumOf { it.qty }
+                primary.copy(
+                    instrument = primary.instrument.copy(
+                        name = mergedName(g.sortedByDescending { it.valueInr }.map { it.instrument })
+                    ),
+                    qty = qtySum,
+                    price = if (qtySum > 0) value / qtySum else primary.price,
+                    value = value,
+                    invested = g.sumOf { it.invested },
+                    valueInr = g.sumOf { it.valueInr },
+                    dayPct = if (value > 0) g.sumOf { it.dayPct * it.value } / value else primary.dayPct,
+                    xirr = xirr(flows, value),
+                )
+            }.sortedByDescending { it.valueInr }
+        }
 
         // ---- recent movers ----
         val movers = mutableListOf<Mover>()
@@ -319,6 +374,7 @@ object PortfolioAnalytics {
         val instrument: Instrument, val bucket: Bucket, val sector: String,
         val days: LongArray,
         val price: DoubleArray,        // native close, NaN where unknown
+        val bench: DoubleArray,        // raw benchmark closes (for price-indexed perf)
         val value: DoubleArray,        // qty × close
         val invested: DoubleArray,     // net contributions, step series
         val benchValue: DoubleArray,   // same cashflows into the bucket's index
@@ -332,16 +388,20 @@ object PortfolioAnalytics {
     )
 
     fun holdingDetail(db: PortfolioDb, isin: String): HoldingDetail? {
-        val inst = db.instruments().firstOrNull { it.isin == isin } ?: return null
-        val trades = db.trades().filter { it.isin == isin }.sortedBy { it.day }
+        val all = db.instruments()
+        val inst = all.firstOrNull { it.isin == isin } ?: return null
+        // all share classes of the company fold into this one view
+        val group = classGroup(inst, all)
+        val isins = group.map { it.isin }.toSet()
+        val trades = db.trades().filter { it.isin in isins }.sortedBy { it.day }
         if (trades.isEmpty()) return null
         val b = bucketOf(inst)
 
-        val raw = db.priceSeries(inst.yahoo)
+        val rawBy = group.associate { it.isin to db.priceSeries(it.yahoo) }
         val bench = db.priceSeries(b.benchSymbol)
         val fxRaw = db.priceSeries("USDINR=X")
         val start = trades.first().day
-        val end = raw.lastOrNull()?.first ?: return null
+        val end = rawBy.values.mapNotNull { it.lastOrNull()?.first }.maxOrNull() ?: return null
         if (end <= start) return null
         val n = (end - start + 1).toInt()
         val days = LongArray(n) { start + it }
@@ -361,12 +421,15 @@ object PortfolioAnalytics {
             return out
         }
         val fx = ffill(fxRaw)
-        val px = ffill(raw).let { arr ->
-            if (isin == "GOLD") DoubleArray(n) { k -> arr[k] * fx[k] / OZ_TO_GRAM } else arr
+        val pxBy = group.associate { g ->
+            g.isin to ffill(rawBy.getValue(g.isin)).let { arr ->
+                if (g.isin == "GOLD") DoubleArray(n) { k -> arr[k] * fx[k] / OZ_TO_GRAM } else arr
+            }
         }
+        val px = pxBy.getValue(inst.isin)   // primary class prices the header & trailing returns
         val bx = ffill(bench)
 
-        val qty = DoubleArray(n)
+        val qtyBy = group.associate { it.isin to DoubleArray(n) }
         val invested = DoubleArray(n)
         val benchUnits = DoubleArray(n)
         val flows = mutableListOf<Pair<Int, Double>>()
@@ -374,20 +437,33 @@ object PortfolioAnalytics {
         for (t in trades) {
             val k = (t.day - start).toInt().coerceIn(0, n - 1)
             val sign = if (t.side == "buy") 1.0 else -1.0
-            qty[k] += sign * t.qty
+            qtyBy.getValue(t.isin)[k] += sign * t.qty
             val cash = sign * (t.qty * t.price + t.fee)
             invested[k] += cash
             flows.add(k to cash)
             if (!bx[k].isNaN() && bx[k] > 0) benchUnits[k] += cash / bx[k]
             dots.add(TradeDot(k, t))
         }
-        for (k in 1 until n) { qty[k] += qty[k - 1]; invested[k] += invested[k - 1]; benchUnits[k] += benchUnits[k - 1] }
+        for (arr in qtyBy.values + listOf(invested, benchUnits))
+            for (k in 1 until n) arr[k] += arr[k - 1]
 
-        val value = DoubleArray(n) { k -> if (px[k].isNaN()) Double.NaN else qty[k] * px[k] }
+        val value = DoubleArray(n) { k ->
+            var v = 0.0
+            var missing = false
+            for (g in group) {
+                val q = qtyBy.getValue(g.isin)[k]
+                if (q > 1e-9) {
+                    val p = pxBy.getValue(g.isin)[k]
+                    if (p.isNaN()) missing = true else v += q * p
+                }
+            }
+            if (missing) Double.NaN else v
+        }
         val benchValue = DoubleArray(n) { k -> if (bx[k].isNaN()) Double.NaN else benchUnits[k] * bx[k] }
 
         val last = n - 1
         val valueNow = value[last].orZero()
+        val qtyNow = group.sumOf { qtyBy.getValue(it.isin)[last] }
 
         fun xirr(terminal: Double): Double? {
             if (terminal <= 0 || flows.isEmpty()) return null
@@ -434,10 +510,12 @@ object PortfolioAnalytics {
             }
 
         return HoldingDetail(
-            instrument = inst, bucket = b, sector = SECTORS[inst.yahoo] ?: inst.type,
-            days = days, price = px, value = value, invested = invested, benchValue = benchValue,
+            instrument = inst.copy(name = mergedName(group)),
+            bucket = b, sector = SECTORS[inst.yahoo] ?: inst.type,
+            days = days, price = px, bench = bx,
+            value = value, invested = invested, benchValue = benchValue,
             trades = trades, tradeDots = dots,
-            qty = qty[last], priceNow = px[last].orZero(), valueNow = valueNow,
+            qty = qtyNow, priceNow = px[last].orZero(), valueNow = valueNow,
             investedNow = invested[last],
             dayPct = dayPct,
             xirr = xirr(valueNow), benchXirr = xirr(benchValue[last].orZero()),

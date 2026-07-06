@@ -192,7 +192,7 @@ class AlertsActivity : AppCompatActivity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setPadding(dp(10), dp(4), dp(10), dp(4))
             setTextColor(getColor(if (overridden) R.color.accent_emerald_light else R.color.text_secondary))
-            setBackgroundResource(if (overridden) R.drawable.bg_pill_active else R.drawable.bg_input_pill)
+            setBackgroundResource(if (overridden) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
         })
         return row
     }
