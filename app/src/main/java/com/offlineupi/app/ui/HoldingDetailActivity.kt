@@ -20,6 +20,7 @@ import com.offlineupi.app.portfolio.PortfolioAnalytics.HoldingDetail
 import com.offlineupi.app.portfolio.PortfolioDb
 import com.offlineupi.app.ui.charts.LineChartView
 import com.offlineupi.app.worker.PriceSyncWorker
+import com.offlineupi.app.util.TimeFmt
 import com.offlineupi.app.util.applySystemBarInsets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -266,9 +267,7 @@ class HoldingDetailActivity : AppCompatActivity() {
     private fun renderIntraday(d: HoldingDetail, bars: List<Pair<Long, Double>>) {
         val secs = LongArray(bars.size) { bars[it].first }
         val px = DoubleArray(bars.size) { bars[it].second }
-        val zone = java.time.ZoneId.systemDefault()
-        val timeFmt = DateTimeFormatter.ofPattern("EEE HH:mm").withZone(zone)
-        fun t(s: Long): String = timeFmt.format(java.time.Instant.ofEpochSecond(s))
+        fun t(s: Long): String = TimeFmt.intraday(s)   // IST, am/pm
         binding.chart.xLabelFormatter = { s -> t(s) }
 
         val first = px.firstOrNull { it > 0 } ?: return
@@ -280,7 +279,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.1f%%".format(it) }
             binding.chart.scrubFormatter = { idx, s, v ->
-                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
+                "${t(s)} IST · ${MoneyFmt.price(px[idx], ccy)} · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
             }
             binding.chart.set(listOf(LineChartView.Series(pct, color, area = true)), secs)
             binding.tvChartLegend.text = "— price · 15m bars · last 48h"
@@ -292,7 +291,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             binding.chart.allowNegative = false
             binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
             binding.chart.scrubFormatter = { idx, s, v ->
-                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${MoneyFmt.money(v, ccy)}"
+                "${t(s)} IST · ${MoneyFmt.price(px[idx], ccy)} · ${MoneyFmt.money(v, ccy)}"
             }
             binding.chart.set(listOf(LineChartView.Series(vals, color, area = true)), secs)
             binding.tvChartLegend.text = "— value · 15m bars · last 48h"

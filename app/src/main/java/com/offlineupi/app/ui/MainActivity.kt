@@ -16,13 +16,10 @@ import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.data.storedName
 import com.offlineupi.app.databinding.ActivityMainBinding
 import com.offlineupi.app.util.ContactsHelper
+import com.offlineupi.app.util.TimeFmt
 import com.offlineupi.app.util.formatMobileForDisplay
 import com.offlineupi.app.worker.DailyBalanceCheckWorker
 import com.offlineupi.app.worker.PriceSyncWorker
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 /**
  * Hosts the four tabs in a ViewPager2 so they are swipeable; the bottom
@@ -119,21 +116,10 @@ class MainActivity : AppCompatActivity() {
         const val MAX_FEED = 20
         const val MAX_RECENTS = 5
 
-        private val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault())
-        private val dayFmt = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+        // Feed timestamps are IST, am/pm — see util/TimeFmt.
+        fun dayLabel(ts: Long): String = TimeFmt.dayLabel(ts)
 
-        fun dayLabel(ts: Long): String {
-            val cal = Calendar.getInstance()
-            val today = cal.get(Calendar.DAY_OF_YEAR); val year = cal.get(Calendar.YEAR)
-            cal.timeInMillis = ts
-            return when {
-                cal.get(Calendar.YEAR) == year && cal.get(Calendar.DAY_OF_YEAR) == today -> "Today"
-                cal.get(Calendar.YEAR) == year && cal.get(Calendar.DAY_OF_YEAR) == today - 1 -> "Yesterday"
-                else -> dayFmt.format(Date(ts))
-            }
-        }
-
-        fun timeLabel(ts: Long): String = timeFmt.format(Date(ts))
+        fun timeLabel(ts: Long): String = TimeFmt.time(ts)
 
         private val avatarBgs = intArrayOf(
             R.drawable.bg_avatar_1e4032, R.drawable.bg_avatar_1d3a4e,

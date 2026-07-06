@@ -24,12 +24,10 @@ import com.offlineupi.app.data.storedName
 import com.offlineupi.app.databinding.ActivityTransactionReceiptBinding
 import com.offlineupi.app.sms.SmsInboxReader
 import com.offlineupi.app.util.ContactsHelper
+import com.offlineupi.app.util.TimeFmt
 import com.offlineupi.app.util.formatIndianNumber
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class TransactionReceiptActivity : AppCompatActivity() {
 
@@ -191,9 +189,8 @@ class TransactionReceiptActivity : AppCompatActivity() {
             }
         }
 
-        // Date & Time
-        val dateFormat = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-        binding.tvDateTime.text = dateFormat.format(Date(txn.timestamp))
+        // Date & Time — IST, am/pm (see util/TimeFmt)
+        binding.tvDateTime.text = TimeFmt.dateTime(txn.timestamp)
 
         // Remarks
         if (!txn.remarks.isNullOrBlank()) {
