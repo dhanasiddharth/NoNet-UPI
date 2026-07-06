@@ -176,8 +176,8 @@ class AlertsActivity : AppCompatActivity() {
         }
         if (dotColor != null) {
             row.addView(View(this).apply {
-                setBackgroundResource(R.drawable.bg_pill_active)
-                background.setTint(dotColor)
+                setBackgroundResource(R.drawable.bg_dot)
+                background.mutate().setTint(dotColor)
             }, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(10) })
         }
         row.addView(TextView(this).apply {

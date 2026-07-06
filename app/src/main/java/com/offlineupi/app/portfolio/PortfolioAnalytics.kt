@@ -55,6 +55,10 @@ object PortfolioAnalytics {
         val seriesNative: DoubleArray,     // daily value in the bucket's currency
         val investedNative: DoubleArray,   // cumulative net contributions
         val benchNative: DoubleArray,      // same cashflows in the bucket's index
+        val seriesInr: DoubleArray,        // INR mirrors, for cross-bucket blends
+        val investedInr: DoubleArray,
+        val benchInr: DoubleArray,
+        val flowsInr: List<Pair<Int, Double>>,   // for XIRR on arbitrary bucket sets
         val value: Double, val invested: Double, val valueInr: Double,
         val xirr: Double?, val benchXirr: Double?, val inflXirr: Double?,
         val dayPct: Double,
@@ -116,6 +120,24 @@ object PortfolioAnalytics {
     fun mergedName(group: List<Instrument>): String =
         if (group.size < 2) group.first().name
         else "${group.first().name} (${group.map { it.yahoo }.sorted().joinToString("+")})"
+
+    /** XIRR by bisection over (dayIndex, cashflow) pairs — for ad-hoc bucket blends. */
+    fun xirrOf(flows: List<Pair<Int, Double>>, terminal: Double, lastIdx: Int): Double? {
+        if (terminal <= 0 || flows.isEmpty()) return null
+        val t0 = flows.minOf { it.first }
+        fun npv(rate: Double): Double {
+            var acc = 0.0
+            for ((k, c) in flows) acc += c / (1 + rate).pow((k - t0) / 365.25)
+            return acc - terminal / (1 + rate).pow((lastIdx - t0) / 365.25)
+        }
+        var lo = -0.9999; var hi = 20.0
+        if (npv(lo) * npv(hi) > 0) return null
+        repeat(120) {
+            val mid = (lo + hi) / 2
+            if (npv(lo) * npv(mid) <= 0) hi = mid else lo = mid
+        }
+        return (lo + hi) / 2
+    }
 
     fun compute(db: PortfolioDb, moverThresholdPct: Double = 4.0): Snapshot? {
         val instruments = db.instruments().associateBy { it.isin }
@@ -179,6 +201,7 @@ object PortfolioAnalytics {
         val investedNatB = Bucket.entries.associateWith { DoubleArray(n) }
         val benchUnits = mutableMapOf("^NSEI" to DoubleArray(n), "^GSPC" to DoubleArray(n))
         val flowsAllInr = mutableListOf<Pair<Int, Double>>()
+        val flowsInrB = Bucket.entries.associateWith { mutableListOf<Pair<Int, Double>>() }
         val flowsNatB = Bucket.entries.associateWith { mutableListOf<Pair<Int, Double>>() }
         val flowsNatByIsin = HashMap<String, MutableList<Pair<Int, Double>>>()
 
@@ -193,6 +216,7 @@ object PortfolioAnalytics {
             investedNatB.getValue(b)[k] += cashNat
             investedInrB.getValue(b)[k] += cashInr
             flowsAllInr.add(k to cashInr)
+            flowsInrB.getValue(b).add(k to cashInr)
             flowsNatB.getValue(b).add(k to cashNat)
             flowsNatByIsin.getOrPut(t.isin) { mutableListOf() }.add(k to cashNat)
             val ref = px[b.benchSymbol]?.get(k) ?: Double.NaN
@@ -269,10 +293,16 @@ object PortfolioAnalytics {
                 benchNative[k] = units * (px[b.benchSymbol]?.get(k) ?: 0.0).orZero()
             }
             val cur = valueNatB.getValue(b)[last]
+            val benchInr = if (b.currency == "USD")
+                DoubleArray(n) { k -> benchNative[k] * fx[k].orZero() } else benchNative
             BucketStat(
                 bucket = b, seriesNative = valueNatB.getValue(b),
                 investedNative = investedNatB.getValue(b),
                 benchNative = benchNative,
+                seriesInr = valueInrB.getValue(b),
+                investedInr = investedInrB.getValue(b),
+                benchInr = benchInr,
+                flowsInr = flowsInrB.getValue(b).sortedBy { it.first },
                 value = cur, invested = investedNatB.getValue(b)[last],
                 valueInr = valueInrB.getValue(b)[last],
                 xirr = xirr(flows, cur),

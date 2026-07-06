@@ -132,7 +132,7 @@ class HoldingsActivity : AppCompatActivity() {
             val h = r.holding
             val row = LayoutInflater.from(this).inflate(R.layout.item_holding_row, wrap, false)
             row.setBackgroundResource(R.drawable.ripple_group)
-            row.findViewById<View>(R.id.hDot).background.setTint(
+            row.findViewById<View>(R.id.hDot).background.mutate().setTint(
                 PortfolioUi.bucketColors.getValue(h.bucket))
             row.findViewById<TextView>(R.id.hName).text = h.instrument.name
             row.findViewById<TextView>(R.id.hSub).text =

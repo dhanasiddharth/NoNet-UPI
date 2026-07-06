@@ -49,7 +49,8 @@ class PortfolioFragment : Fragment() {
 
     private var snapshot: Snapshot? = null
     private var range = "1Y"
-    private var bucket: Bucket? = null
+    /** Focused buckets — empty or all = whole portfolio; any subset combines. */
+    private val selection = linkedSetOf<Bucket>()
     private var compare = false
     private var masked = false
     private var chartMode = "Value"
@@ -352,58 +353,98 @@ class PortfolioFragment : Fragment() {
         renderHoldings(s)
     }
 
-    private fun seriesFor(s: Snapshot): DoubleArray =
-        bucket?.let { s.buckets.getValue(it).seriesNative } ?: s.totalInr
+    /**
+     * Value/invested/bench sources for the current selection. One bucket (or a
+     * same-currency set like US+Crypto) stays native per the currency policy;
+     * a cross-currency blend like India+US falls back to INR.
+     */
+    private data class Src(
+        val values: DoubleArray, val invested: DoubleArray, val bench: DoubleArray,
+        val ccy: String, val color: Int, val label: String, val benchName: String,
+        val flowsInr: List<Pair<Int, Double>>?, val xirr: Double?,
+    )
 
-    private fun currencyFor(): String = bucket?.currency ?: "INR"
+    private fun src(s: Snapshot): Src {
+        val sel = selection.toList()
+        if (sel.isEmpty() || sel.size == Bucket.entries.size) return Src(
+            s.totalInr, s.investedInr, s.benchInr, "INR", brand, "Portfolio", "indexes",
+            null, s.xirr,
+        )
+        val stats = sel.map { s.buckets.getValue(it) }
+        val uniformCcy = sel.first().currency.takeIf { c -> sel.all { it.currency == c } }
+        val label = sel.joinToString(" + ") { it.label }
+        val benchName = sel.map { it.benchName }.distinct().joinToString(" + ")
+        val color = if (sel.size == 1) bucketColors.getValue(sel[0]) else brand
+        val flows = stats.flatMap { it.flowsInr }.sortedBy { it.first }
+        val xirr = if (sel.size == 1) stats[0].xirr else PortfolioAnalytics.xirrOf(
+            flows, stats.sumOf { it.valueInr }, s.days.size - 1)
+        fun sum(pick: (PortfolioAnalytics.BucketStat) -> DoubleArray): DoubleArray {
+            val arrs = stats.map(pick)
+            return DoubleArray(arrs[0].size) { k -> arrs.sumOf { it[k] } }
+        }
+        return if (uniformCcy != null) Src(
+            sum { it.seriesNative }, sum { it.investedNative }, sum { it.benchNative },
+            uniformCcy, color, label, benchName, flows, xirr,
+        ) else Src(
+            sum { it.seriesInr }, sum { it.investedInr }, sum { it.benchInr },
+            "INR", color, label, benchName, flows, xirr,
+        )
+    }
 
     @SuppressLint("SetTextI18n")
     private fun renderHero(s: Snapshot) {
-        val series = seriesFor(s)
-        val v = series.last()
-        val ccy = currencyFor()
-        val st = bucket?.let { s.buckets.getValue(it) }
-        binding.tvHeroValue.text = mask(money(v, ccy))
-        val dayPct = st?.dayPct ?: run {
-            var i = series.size - 1
-            while (i > 0 && series[i] == series[i - 1]) i--
-            if (i > 0 && series[i - 1] > 0) (series.last() / series[i - 1] - 1) * 100 else 0.0
-        }
-        val dayAmt = v - v / (1 + dayPct / 100)
-        chip(binding.tvDayChip, if (abs(dayPct) < 0.005) null else dayPct > 0,
-            mask("${if (dayAmt >= 0) "+" else "−"}${money(abs(dayAmt), ccy)} · ${"%.1f".format(abs(dayPct))}% today"))
-        binding.tvXirrChip.text = "XIRR " + pct(st?.xirr ?: s.xirr)
-        val invested = st?.invested ?: s.invested
+        val sc = src(s)
+        val v = sc.values.last()
+        binding.tvHeroValue.text = mask(money(v, sc.ccy))
+        // the change chip follows the selected range, so 1M/3M/… re-frame the
+        // whole page, not only the chart
+        val i0 = startIndex(s)
+        val v0 = (i0 until sc.values.size).firstOrNull { sc.values[it] > 0 }
+            ?.let { sc.values[it] } ?: v
+        val delta = v - v0
+        val deltaPct = if (v0 > 0) delta / v0 * 100 else 0.0
+        chip(binding.tvDayChip, if (abs(deltaPct) < 0.05) null else delta > 0,
+            mask("${if (delta >= 0) "+" else "−"}${money(abs(delta), sc.ccy)} · ${"%.1f".format(abs(deltaPct))}% · $range"))
+        binding.tvXirrChip.text = "XIRR " + pct(sc.xirr)
+        val invested = sc.invested.last()
         val asOf = LocalDate.ofEpochDay(s.asOfDay).format(DateTimeFormatter.ofPattern("d MMM"))
-        binding.tvHeroSub.text = mask("invested ${money(invested, ccy)}") + " · as of $asOf"
+        binding.tvHeroSub.text =
+            "${sc.label} · " + mask("invested ${money(invested, sc.ccy)}") + " · as of $asOf"
     }
 
     private fun renderTiles(s: Snapshot) {
         val wrap = binding.layoutTiles
         wrap.removeAllViews()
+        val i0 = startIndex(s)
         for (b in Bucket.entries) {
             val st = s.buckets.getValue(b)
             val tile = LayoutInflater.from(requireContext())
                 .inflate(R.layout.item_bucket_tile, wrap, false)
             val dot = tile.findViewById<View>(R.id.tileDot)
-            dot.background.setTint(bucketColors.getValue(b))
+            dot.background.mutate().setTint(bucketColors.getValue(b))
             tile.findViewById<TextView>(R.id.tileName).text = b.label
             tile.findViewById<TextView>(R.id.tileValue).text = mask(money(st.value, b.currency))
+            // spark + move follow the selected range, like the rest of the page
             tile.findViewById<SparkView>(R.id.tileSpark)
-                .set(st.seriesNative.takeLast30(), bucketColors.getValue(b))
+                .set(st.seriesNative.window(i0), bucketColors.getValue(b))
             val d = tile.findViewById<TextView>(R.id.tileDay)
-            d.text = pct(st.dayPct / 100)
+            val w0 = (i0 until st.seriesNative.size)
+                .firstOrNull { st.seriesNative[it] > 0 }?.let { st.seriesNative[it] } ?: 0.0
+            val movePct = if (w0 > 0) (st.value / w0 - 1) * 100 else 0.0
+            d.text = "${if (movePct >= 0) "+" else ""}${"%.1f".format(movePct)}%"
             d.setTextColor(requireContext().getColor(
-                when { st.dayPct > 0.05 -> R.color.accent_green
-                    st.dayPct < -0.05 -> R.color.accent_red
+                when { movePct > 0.05 -> R.color.accent_green
+                    movePct < -0.05 -> R.color.accent_red
                     else -> R.color.text_secondary }
             ))
-            tile.isSelected = bucket == b
+            val chosen = b in selection
+            tile.isSelected = chosen
             tile.setBackgroundResource(
-                if (bucket == b) R.drawable.bg_tile_selected else R.drawable.bg_detail_group
+                if (chosen) R.drawable.bg_tile_selected else R.drawable.bg_detail_group
             )
             tile.setOnClickListener {
-                bucket = if (bucket == b) null else b
+                if (!selection.add(b)) selection.remove(b)
+                if (selection.size == Bucket.entries.size) selection.clear()
                 snapshot?.let { render(it) }
             }
             wrap.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -411,9 +452,12 @@ class PortfolioFragment : Fragment() {
         }
     }
 
-    private fun DoubleArray.takeLast30(): DoubleArray {
-        val from = (size - 30).coerceAtLeast(0)
-        return copyOfRange(from, size)
+    /** Windowed, downsampled slice for the tile sparklines. */
+    private fun DoubleArray.window(from: Int): DoubleArray {
+        val n = size - from
+        if (n <= 64) return copyOfRange(from, size)
+        val stride = n / 64f
+        return DoubleArray(64) { i -> this[from + (i * stride).toInt().coerceAtMost(n - 1)] }
     }
 
     private val ranges = listOf("1M", "3M", "6M", "YTD", "1Y", "All")
@@ -429,7 +473,7 @@ class PortfolioFragment : Fragment() {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(5), 0, dp(5))
                 if (r == range) {
-                    setBackgroundResource(R.drawable.bg_pill_active)
+                    setBackgroundResource(R.drawable.bg_pill_selected)
                     setTextColor(requireContext().getColor(R.color.accent_emerald_light))
                 } else {
                     setBackgroundResource(R.drawable.bg_input_pill)
@@ -437,7 +481,8 @@ class PortfolioFragment : Fragment() {
                 }
                 setOnClickListener {
                     range = r
-                    snapshot?.let { renderRanges(); renderChart(it) }
+                    // the range re-frames the whole page (hero, tiles, chart)
+                    snapshot?.let { render(it) }
                 }
             }
             wrap.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -454,67 +499,60 @@ class PortfolioFragment : Fragment() {
         }
         var i = s.days.indexOfFirst { it >= fromDay }
         if (i < 0) i = 0
-        val series = seriesFor(s)
+        val series = src(s).values
         while (i < series.size - 1 && series[i] <= 0) i++
         return i
     }
 
-    /** Value/invested/bench sources for whatever is focused (portfolio or a bucket). */
-    private fun chartSources(s: Snapshot): Triple<DoubleArray, DoubleArray, DoubleArray> {
-        val st = bucket?.let { s.buckets.getValue(it) }
-        return Triple(
-            st?.seriesNative ?: s.totalInr,
-            st?.investedNative ?: s.investedInr,
-            st?.benchNative ?: s.benchInr,
-        )
-    }
-
     @SuppressLint("SetTextI18n")
     private fun renderChart(s: Snapshot) {
+        val sc = src(s)
         val i0 = startIndex(s)
-        val (series, investedSeries, benchSeries) = chartSources(s)
-        val ccy = currencyFor()
-        val color = bucket?.let { bucketColors.getValue(it) } ?: brand
-        val fmt = DateTimeFormatter.ofPattern(if (range == "All") "MMM yy" else "MMM")
-        val mid = (i0 + s.days.size - 1) / 2
-        val labels = listOf(
-            LocalDate.ofEpochDay(s.days[i0]).format(fmt),
-            LocalDate.ofEpochDay(s.days[mid]).format(fmt),
-            LocalDate.ofEpochDay(s.days.last()).format(fmt),
-        )
+        val n = sc.values.size
+        val win = n - i0
+        val dateFmt = DateTimeFormatter.ofPattern("d MMM yy")
 
         if (chartMode == "Perf") {
-            // time-weighted return: each day's growth is measured after backing
-            // out that day's contributions, so deposits/sells never move the line
-            val n = series.size
+            // time-weighted return over full history: each day's growth is
+            // measured after backing out that day's contributions, so deposits
+            // and sells never move the line. The chart re-anchors 0% to the
+            // visible window (rebase) so panning stays meaningful.
             fun twr(values: DoubleArray): DoubleArray {
-                val out = DoubleArray(n - i0) { Double.NaN }
+                val out = DoubleArray(n) { Double.NaN }
                 var level = 1.0
                 var prev = Double.NaN
-                for (j in 0 until n - i0) {
-                    val k = i0 + j
+                for (k in 0 until n) {
                     val v = values[k]
                     if (v.isNaN() || v <= 0) continue
                     if (!prev.isNaN() && k > 0) {
-                        val base = prev + (investedSeries[k] - investedSeries[k - 1])
+                        val base = prev + (sc.invested[k] - sc.invested[k - 1])
                         if (base > 0) level *= v / base
                     }
                     prev = v
-                    out[j] = (level - 1) * 100
+                    out[k] = (level - 1) * 100
                 }
                 return out
             }
-            val you = twr(series)
-            val bench = twr(benchSeries)
+            val you = twr(sc.values)
+            val bench = twr(sc.bench)
+            fun windowRel(arr: DoubleArray): Double? {
+                val b = (i0 until n).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                val e = (n - 1 downTo i0).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                return ((1 + e / 100) / (1 + b / 100) - 1) * 100
+            }
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.0f%%".format(it) }
+            binding.chart.scrubFormatter = { _, day, v ->
+                LocalDate.ofEpochDay(day).format(dateFmt) +
+                    " · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
+            }
             binding.chart.set(listOf(
-                LineChartView.Series(you, color, area = true),
+                LineChartView.Series(you, sc.color, area = true),
                 LineChartView.Series(bench, mutedLine, widthDp = 1.8f),
-            ), labels)
-            binding.tvLegend.text = "— return %, contributions stripped   — ${bucket?.benchName ?: "index"}"
-            val yNow = you.lastOrNull { !it.isNaN() } ?: 0.0
-            val gap = yNow - (bench.lastOrNull { !it.isNaN() } ?: 0.0)
+            ), s.days, emptyList(), win, rebase = true)
+            binding.tvLegend.text = "— return %, contributions stripped   — ${sc.benchName}"
+            val yNow = windowRel(you) ?: 0.0
+            val gap = yNow - (windowRel(bench) ?: 0.0)
             binding.tvRangeValue.text = "${if (yNow >= 0) "+" else ""}${"%.1f".format(yNow)}%"
             chip(binding.tvRangeChange, if (abs(gap) < 0.05) null else gap > 0,
                 "${if (gap >= 0) "+" else ""}${"%.1f".format(gap)} pts vs index")
@@ -522,31 +560,32 @@ class PortfolioFragment : Fragment() {
             return
         }
 
-        val slice = series.copyOfRange(i0, series.size)
-        val lines = mutableListOf(LineChartView.Series(slice, color, area = true))
-        var legend = if (bucket != null) "— ${bucket!!.label} value" else "— Portfolio value"
+        val lines = mutableListOf(LineChartView.Series(sc.values, sc.color, area = true))
+        var legend = "— ${sc.label} value"
         if (compare) {
-            lines += LineChartView.Series(
-                benchSeries.copyOfRange(i0, benchSeries.size), mutedLine, widthDp = 1.8f)
-            lines += LineChartView.Series(
-                investedSeries.copyOfRange(i0, investedSeries.size), mutedLine, widthDp = 1.4f, dashed = true)
-            legend = "— ${bucket?.label ?: "Portfolio"}   — Same money in ${bucket?.benchName ?: "index"}   ┈ Invested"
+            lines += LineChartView.Series(sc.bench, mutedLine, widthDp = 1.8f)
+            lines += LineChartView.Series(sc.invested, mutedLine, widthDp = 1.4f, dashed = true)
+            legend = "— ${sc.label}   — Same money in ${sc.benchName}   ┈ Invested"
         }
         binding.chart.allowNegative = false
-        binding.chart.yFormatter = { com.offlineupi.app.portfolio.MoneyFmt.axis(it, ccy) }
-        binding.chart.set(lines, labels)
+        binding.chart.yFormatter = { com.offlineupi.app.portfolio.MoneyFmt.axis(it, sc.ccy) }
+        binding.chart.scrubFormatter = { _, day, v ->
+            LocalDate.ofEpochDay(day).format(dateFmt) + " · " + mask(money(v, sc.ccy))
+        }
+        binding.chart.set(lines, s.days, emptyList(), win, rebase = false)
         binding.tvLegend.text = legend
 
-        val v = slice.last(); val v0 = slice.firstOrNull { it > 0 } ?: 1.0
-        val added = investedSeries.last() - investedSeries[i0]
+        val v = sc.values.last()
+        val v0 = (i0 until n).firstOrNull { sc.values[it] > 0 }?.let { sc.values[it] } ?: 1.0
+        val added = sc.invested.last() - sc.invested[i0]
         val gain = v - v0 - added
         val base = v0 + added.coerceAtLeast(0.0)
         val gp = if (base > 0) gain / base else 0.0
-        binding.tvRangeValue.text = mask(money(v, ccy))
+        binding.tvRangeValue.text = mask(money(v, sc.ccy))
         chip(binding.tvRangeChange, if (abs(gp) < 1e-4) null else gain > 0,
-            mask("${if (gain >= 0) "+" else "−"}${money(abs(gain), ccy)} · ${"%.1f".format(abs(gp) * 100)}%"))
+            mask("${if (gain >= 0) "+" else "−"}${money(abs(gain), sc.ccy)} · ${"%.1f".format(abs(gp) * 100)}%"))
         binding.tvRangeMeta.text =
-            if (added > 1000) "$range · added ${mask(money(added, ccy))}" else range
+            if (added > 1000) "$range · added ${mask(money(added, sc.ccy))}" else range
     }
 
     private fun renderDotPlot(s: Snapshot) {
@@ -593,8 +632,8 @@ class PortfolioFragment : Fragment() {
                 setPadding(0, dp(5), 0, dp(5))
             }
             row.addView(View(requireContext()).apply {
-                setBackgroundResource(R.drawable.bg_pill_active)
-                background.setTint(bucketColors.getValue(b))
+                setBackgroundResource(R.drawable.bg_dot)
+                background.mutate().setTint(bucketColors.getValue(b))
             }, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(10) })
             row.addView(TextView(requireContext()).apply {
                 text = b.label
@@ -682,7 +721,7 @@ class PortfolioFragment : Fragment() {
                 .inflate(R.layout.item_holding_row, wrap, false)
             row.setBackgroundResource(R.drawable.ripple_group)
             row.setOnClickListener { openDetail(h.instrument.isin) }
-            row.findViewById<View>(R.id.hDot).background.setTint(bucketColors.getValue(h.bucket))
+            row.findViewById<View>(R.id.hDot).background.mutate().setTint(bucketColors.getValue(h.bucket))
             row.findViewById<TextView>(R.id.hName).text = h.instrument.name
             row.findViewById<TextView>(R.id.hSub).text =
                 mask(money(h.invested, h.instrument.currency)) + " in · " +

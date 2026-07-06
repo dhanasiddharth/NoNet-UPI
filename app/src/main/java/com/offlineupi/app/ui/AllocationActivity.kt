@@ -230,8 +230,8 @@ class AllocationActivity : AppCompatActivity() {
                 setOnClickListener { binding.treemap.drillInto(n) }
             }
             row.addView(View(this).apply {
-                setBackgroundResource(R.drawable.bg_pill_active)
-                background.setTint(n.color)
+                setBackgroundResource(R.drawable.bg_dot)
+                background.mutate().setTint(n.color)
             }, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(10) })
             row.addView(TextView(this).apply {
                 text = n.label

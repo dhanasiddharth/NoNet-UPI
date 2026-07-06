@@ -16,7 +16,7 @@
             android:layout_width="7dp"
             android:layout_height="7dp"
             android:layout_marginEnd="5dp"
-            android:background="@drawable/bg_pill_active" />
+            android:background="@drawable/bg_dot" />
         <TextView
             android:id="@+id/tileName"
             android:layout_width="wrap_content"

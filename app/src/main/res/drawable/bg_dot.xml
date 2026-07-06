@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Series/bucket identity dot. Tint sites MUST call background.mutate()
+     first — a bare setTint mutates the shared state and leaks the color
+     into every other view using the same drawable. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/text_secondary" />
+</shape>

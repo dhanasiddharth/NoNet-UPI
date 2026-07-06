@@ -144,53 +144,61 @@ class HoldingDetailActivity : AppCompatActivity() {
     private fun renderChart(d: HoldingDetail) {
         val i0 = startIndex(d)
         val n = d.days.size
-        val fmt = DateTimeFormatter.ofPattern(if (range == "All" || range == "3Y") "MMM yy" else "MMM")
-        val labels = listOf(
-            LocalDate.ofEpochDay(d.days[i0]).format(fmt),
-            LocalDate.ofEpochDay(d.days[(i0 + n - 1) / 2]).format(fmt),
-            LocalDate.ofEpochDay(d.days.last()).format(fmt),
-        )
+        val win = n - i0
+        val dateFmt = DateTimeFormatter.ofPattern("d MMM yy")
+        val dots = d.tradeDots.map { it.idx }
 
         if (chartMode == "Performance") {
-            // pure price performance, indexed from the range start — buys and
-            // sells never move these lines, only market moves do
-            fun indexed(series: DoubleArray): DoubleArray {
+            // cumulative price % over full history; the chart re-anchors 0% to
+            // the visible window, so both ranges and panning stay pure price
+            // moves — buys/sells appear only as markers
+            fun indexedFull(series: DoubleArray): DoubleArray {
                 var base = Double.NaN
-                var k = i0
+                var k = 0
                 while (k < n && (series[k].isNaN() || series[k] <= 0)) k++
                 if (k < n) base = series[k]
-                return DoubleArray(n - i0) { j ->
-                    val v = series[i0 + j]
-                    if (v.isNaN() || base.isNaN() || base <= 0) Double.NaN else (v / base - 1) * 100
+                return DoubleArray(n) { j ->
+                    val v = series[j]
+                    if (v.isNaN() || v <= 0 || base.isNaN()) Double.NaN else (v / base - 1) * 100
                 }
             }
-            val you = indexed(d.price)
-            val bench = indexed(d.bench)
-            // trade markers ride the price line: entry/exit timing vs the market
-            val dots = d.tradeDots.filter { it.idx >= i0 }
-                .map { (it.idx - i0) to you[it.idx - i0] }
-                .filter { !it.second.isNaN() }
+            val you = indexedFull(d.price)
+            val bench = indexedFull(d.bench)
+            fun windowRel(arr: DoubleArray): Double? {
+                val b = (i0 until n).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                val e = (n - 1 downTo i0).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                return ((1 + e / 100) / (1 + b / 100) - 1) * 100
+            }
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.0f%%".format(it) }
+            binding.chart.scrubFormatter = { idx, day, v ->
+                val px = d.price.getOrNull(idx)?.takeIf { !it.isNaN() }
+                LocalDate.ofEpochDay(day).format(dateFmt) +
+                    (px?.let { " · ${MoneyFmt.price(it, ccy)}" } ?: "") +
+                    " · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
+            }
             binding.chart.set(listOf(
                 LineChartView.Series(you, color, area = true),
                 LineChartView.Series(bench, PortfolioUi.MUTED_LINE, widthDp = 1.8f),
-            ), labels, dots)
+            ), d.days, dots, win, rebase = true)
             binding.tvChartLegend.text = "— price   — ${d.bucket.benchName}   ● trades"
-            val gap = (you.lastOrNull { !it.isNaN() } ?: 0.0) - (bench.lastOrNull { !it.isNaN() } ?: 0.0)
+            val yNow = windowRel(you) ?: 0.0
+            val gap = yNow - (windowRel(bench) ?: 0.0)
             binding.tvChartStat.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
             binding.tvChartStat.setTextColor(getColor(if (gap >= 0) R.color.accent_green else R.color.accent_red))
         } else {
-            val valueSlice = DoubleArray(n - i0) { j -> d.value[i0 + j] }
-            val investedSlice = DoubleArray(n - i0) { j -> d.invested[i0 + j] }
-            val dots = d.tradeDots.filter { it.idx >= i0 && !d.value[it.idx].isNaN() }
-                .map { (it.idx - i0) to d.value[it.idx] }
             binding.chart.allowNegative = false
             binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
+            binding.chart.scrubFormatter = { idx, day, v ->
+                val px = d.price.getOrNull(idx)?.takeIf { !it.isNaN() }
+                LocalDate.ofEpochDay(day).format(dateFmt) +
+                    (px?.let { " · ${MoneyFmt.price(it, ccy)}" } ?: "") +
+                    " · ${MoneyFmt.money(v, ccy)}"
+            }
             binding.chart.set(listOf(
-                LineChartView.Series(valueSlice, color, area = true),
-                LineChartView.Series(investedSlice, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
-            ), labels, dots)
+                LineChartView.Series(d.value, color, area = true),
+                LineChartView.Series(d.invested, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
+            ), d.days, dots, win, rebase = false)
             binding.tvChartLegend.text = "— value   ┈ invested   ● trades"
             binding.tvChartStat.text = MoneyFmt.money(d.valueNow, ccy)
             binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
