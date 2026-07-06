@@ -18,6 +18,7 @@ import com.offlineupi.app.databinding.ActivityMainBinding
 import com.offlineupi.app.util.ContactsHelper
 import com.offlineupi.app.util.formatMobileForDisplay
 import com.offlineupi.app.worker.DailyBalanceCheckWorker
+import com.offlineupi.app.worker.PriceSyncWorker
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -41,6 +42,7 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets(binding.root)
 
         DailyBalanceCheckWorker.schedule(this)
+        PriceSyncWorker.schedule(this)
         TransactionStore(this).deduplicateByRrn()
 
         // Contact names + photos across the app; lookups no-op until granted.

@@ -31,4 +31,13 @@
         <item name="android:textColorSecondary">@color/text_secondary</item>
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
     </style>
+
+    <!-- Hairline between flat Money-tab sections -->
+    <style name="PortfolioDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1px</item>
+        <item name="android:background">@color/divider</item>
+        <item name="android:layout_marginTop">18dp</item>
+        <item name="android:layout_marginBottom">18dp</item>
+    </style>
 </resources>
