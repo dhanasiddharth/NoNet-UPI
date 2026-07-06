@@ -103,18 +103,27 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     /**
      * @param windowSize points initially visible (≤1 or >n → all)
      * @param rebase values are cumulative %; re-anchor each series to the window start
+     *
+     * Same calendar + same window size (e.g. flipping Performance ↔ Value, or
+     * toggling an overlay) keeps the panned window and crosshair in place;
+     * a new range or new data resets to the most recent window.
      */
     fun set(series: List<Series>, dates: LongArray = LongArray(0),
             dots: List<Int> = emptyList(), windowSize: Int = 0, rebase: Boolean = false) {
+        val newN = series.firstOrNull()?.values?.size ?: 0
+        val newWin = if (windowSize <= 1 || windowSize > newN) newN else windowSize
+        val keepViewport = newN == n && newWin == winSize && winEnd in newWin..newN
         this.series = series.map { s -> s.copy(values = s.values.copyOf()) }
-        n = this.series.firstOrNull()?.values?.size ?: 0
+        n = newN
         this.dates = dates
         dotIdx = dots
         this.rebase = rebase
-        winSize = if (windowSize <= 1 || windowSize > n) n else windowSize
-        winEnd = n
-        scrubIdx = -1
-        panAccum = 0f
+        winSize = newWin
+        if (!keepViewport) {
+            winEnd = n
+            scrubIdx = -1
+            panAccum = 0f
+        }
         invalidate()
     }
 
