@@ -19,11 +19,26 @@ data in git — the bundled seed asset is git-ignored and baked into local build
   sparklines, performance chart with ranges + vs-index overlay, dot plot
   (you/index/inflation), allocation bar + key, movement feed, top-5 holdings, Sync row.
 - **Alerts**: daily WorkManager price sync, then threshold check (default ±4%/day) →
-  notification with the ₹ small icon. Per-market/sector/holding rule cascade is UI-only
-  in the spec for now; engine applies the default.
+  notification with the ₹ small icon.
+
+## Build 2 (all spec'd screens)
+
+- **Allocation screen**: squarified treemap, area = INR weight, labels native. Tap or
+  pinch-out zooms bucket → sector → holding; pinch-in / back zooms out; key list
+  follows the current level.
+- **Holdings movement screen**: every holding with period chips (1D–1Y), native price
+  move + spark per period, sortable by Move/Value/Invested/XIRR (tap again to flip).
+- **Holding detail screen**: two charts by design — performance (you vs same cashflows
+  in the bucket index, both % of invested) and value (invested line + trade dots);
+  trailing returns vs index (1M–3Y), position stats incl. index/inflation XIRR, trade
+  history, per-holding alert threshold row.
+- **Alerts screen**: fired-alert history (alert_log) + threshold cascade editor —
+  holding rule ▸ bucket rule ▸ default; worker resolves per holding and logs hits.
+- Overview wires into all of these: bell → Alerts, Zoom › → Allocation, All › →
+  Holdings, any holding/mover row → detail. DB schema v2 adds alert_rule/alert_log.
 
 ## Later builds
-- Allocation screen (zoomable treemap), Holdings movement screen, Holding detail
-  (performance + value charts), alert rule editor, scrub interaction on charts.
+
+- Chart scrub interaction; treemap free pinch-zoom (continuous scale).
 - CPI from MOSPI/BLS instead of the built-in table; gold premium factor setting.
 - Broker CSV importers, then broker APIs; backend + proper auth when one exists.

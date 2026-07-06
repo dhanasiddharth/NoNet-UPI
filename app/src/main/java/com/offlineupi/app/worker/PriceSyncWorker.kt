@@ -44,7 +44,7 @@ class PriceSyncWorker(context: Context, params: WorkerParameters) : Worker(conte
 
     companion object {
         private const val CHANNEL = "movement_alerts"
-        private const val DEFAULT_THRESHOLD = 4.0
+        const val DEFAULT_THRESHOLD = 4.0
 
         fun schedule(context: Context) {
             val req = PeriodicWorkRequestBuilder<PriceSyncWorker>(24, TimeUnit.HOURS).build()
@@ -53,15 +53,29 @@ class PriceSyncWorker(context: Context, params: WorkerParameters) : Worker(conte
             )
         }
 
+        /** isin rule > bucket rule > default rule > built-in ±4%. */
+        fun resolvedThreshold(rules: Map<String, Double>, h: PortfolioAnalytics.Holding): Double =
+            rules["isin:${h.instrument.isin}"]
+                ?: rules["bucket:${h.bucket.name}"]
+                ?: rules["default"]
+                ?: DEFAULT_THRESHOLD
+
         /** Notifies once per holding per close-day; re-runs are deduped via meta. */
         fun checkMovements(context: Context, db: PortfolioDb) {
-            val snap = PortfolioAnalytics.compute(db) ?: return
+            val rules = db.alertRules()
+            // compute() collects movers down to the loosest rule; filter per holding after
+            val floor = (rules.values + DEFAULT_THRESHOLD).min().coerceAtLeast(0.5)
+            val snap = PortfolioAnalytics.compute(db, floor) ?: return
             val todays = snap.movers.filter { it.day == snap.asOfDay &&
-                abs(it.pct) >= DEFAULT_THRESHOLD }
+                abs(it.pct) >= resolvedThreshold(rules, it.holding) }
             if (todays.isEmpty()) return
             val lastNotified = db.getMeta("alertedDay")?.toLongOrNull() ?: 0L
             if (snap.asOfDay <= lastNotified) return
             db.setMeta("alertedDay", snap.asOfDay.toString())
+            for (m in todays) db.logAlert(PortfolioDb.AlertEntry(
+                m.day, m.holding.instrument.isin, m.holding.instrument.name,
+                m.pct, m.holding.value, m.holding.instrument.currency
+            ))
 
             ensureChannel(context)
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)

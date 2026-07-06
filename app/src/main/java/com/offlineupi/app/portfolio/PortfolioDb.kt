@@ -32,7 +32,7 @@ data class Trade(
  * comfort zone on-device.
  */
 class PortfolioDb(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "portfolio.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "portfolio.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE instrument (isin TEXT PRIMARY KEY, yahoo TEXT, currency TEXT, type TEXT, name TEXT)")
@@ -40,9 +40,21 @@ class PortfolioDb(context: Context) :
         db.execSQL("CREATE TABLE price (symbol TEXT, day INTEGER, close REAL, PRIMARY KEY(symbol, day))")
         db.execSQL("CREATE INDEX idx_trade_isin ON trade(isin)")
         db.execSQL("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+        createAlertTables(db)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
+        if (old < 2) createAlertTables(db)
+    }
+
+    private fun createAlertTables(db: SQLiteDatabase) {
+        // scope: "default" | "bucket:<Bucket.name>" | "isin:<isin>"; pct is ±%
+        db.execSQL("CREATE TABLE alert_rule (scope TEXT PRIMARY KEY, pct REAL)")
+        db.execSQL(
+            "CREATE TABLE alert_log (day INTEGER, isin TEXT, name TEXT, pct REAL, " +
+                "value REAL, currency TEXT, PRIMARY KEY(day, isin))"
+        )
+    }
 
     // ---- meta ----
     fun getMeta(k: String): String? = readableDatabase
@@ -124,6 +136,40 @@ class PortfolioDb(context: Context) :
     fun priceSymbols(): Set<String> = readableDatabase
         .rawQuery("SELECT DISTINCT symbol FROM price", null).use { c ->
             buildSet { while (c.moveToNext()) add(c.getString(0)) }
+        }
+
+    // ---- alert rules (threshold cascade: isin > bucket > default) ----
+    fun alertRules(): Map<String, Double> = readableDatabase
+        .rawQuery("SELECT scope, pct FROM alert_rule", null).use { c ->
+            buildMap { while (c.moveToNext()) put(c.getString(0), c.getDouble(1)) }
+        }
+
+    /** null pct removes the rule (falls back up the cascade). */
+    fun setAlertRule(scope: String, pct: Double?) {
+        if (pct == null) writableDatabase.execSQL("DELETE FROM alert_rule WHERE scope=?", arrayOf(scope))
+        else writableDatabase.execSQL(
+            "INSERT OR REPLACE INTO alert_rule(scope,pct) VALUES(?,?)", arrayOf(scope, pct)
+        )
+    }
+
+    // ---- alert history ----
+    data class AlertEntry(val day: Long, val isin: String, val name: String,
+                          val pct: Double, val value: Double, val currency: String)
+
+    fun logAlert(e: AlertEntry) {
+        writableDatabase.insertWithOnConflict("alert_log", null, ContentValues().apply {
+            put("day", e.day); put("isin", e.isin); put("name", e.name)
+            put("pct", e.pct); put("value", e.value); put("currency", e.currency)
+        }, SQLiteDatabase.CONFLICT_IGNORE)
+    }
+
+    fun recentAlerts(limit: Int = 40): List<AlertEntry> = readableDatabase
+        .rawQuery("SELECT day,isin,name,pct,value,currency FROM alert_log ORDER BY day DESC, pct DESC LIMIT ?",
+            arrayOf(limit.toString())).use { c ->
+            buildList {
+                while (c.moveToNext()) add(AlertEntry(c.getLong(0), c.getString(1),
+                    c.getString(2), c.getDouble(3), c.getDouble(4), c.getString(5)))
+            }
         }
 
     companion object {

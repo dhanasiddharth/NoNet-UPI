@@ -81,6 +81,13 @@ class PortfolioFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.btnSync.setOnClickListener { startSync(listingToo = false) }
         binding.btnSync.setOnLongClickListener { configureOrSyncListing(); true }
+        binding.btnAlerts.setOnClickListener {
+            startActivity(android.content.Intent(requireContext(), AlertsActivity::class.java))
+        }
+        binding.tvAllocZoom.setOnClickListener { openAllocation() }
+        binding.allocBar.setOnClickListener { openAllocation() }
+        binding.tvMoversAll.setOnClickListener { openHoldings("1D", "Move") }
+        binding.tvHoldingsAll.setOnClickListener { openHoldings("1M", "Value") }
         binding.btnEye.setOnClickListener {
             masked = !masked
             binding.btnEye.setImageResource(
@@ -227,6 +234,25 @@ class PortfolioFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    // ---------- navigation ----------
+    private fun openAllocation() {
+        startActivity(android.content.Intent(requireContext(), AllocationActivity::class.java))
+    }
+
+    private fun openHoldings(period: String, sort: String) {
+        startActivity(
+            android.content.Intent(requireContext(), HoldingsActivity::class.java)
+                .putExtra("period", period).putExtra("sort", sort)
+        )
+    }
+
+    private fun openDetail(isin: String) {
+        startActivity(
+            android.content.Intent(requireContext(), HoldingDetailActivity::class.java)
+                .putExtra("isin", isin)
+        )
     }
 
     private fun requestNotifPermission() {
@@ -529,6 +555,8 @@ class PortfolioFragment : Fragment() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, dp(8), 0, dp(8))
+                setBackgroundResource(R.drawable.ripple_group)
+                setOnClickListener { openDetail(m.holding.instrument.isin) }
             }
             row.addView(TextView(requireContext()).apply {
                 text = LocalDate.ofEpochDay(m.day).format(fmt)
@@ -571,6 +599,8 @@ class PortfolioFragment : Fragment() {
         for (h in s.holdings.take(5)) {
             val row = LayoutInflater.from(requireContext())
                 .inflate(R.layout.item_holding_row, wrap, false)
+            row.setBackgroundResource(R.drawable.ripple_group)
+            row.setOnClickListener { openDetail(h.instrument.isin) }
             row.findViewById<View>(R.id.hDot).background.setTint(bucketColors.getValue(h.bucket))
             row.findViewById<TextView>(R.id.hName).text = h.instrument.name
             row.findViewById<TextView>(R.id.hSub).text =

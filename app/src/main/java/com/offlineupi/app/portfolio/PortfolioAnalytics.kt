@@ -87,6 +87,9 @@ object PortfolioAnalytics {
         else -> Bucket.India
     }
 
+    /** Last computed snapshot — sub-screens reuse it instead of recomputing. */
+    @Volatile var cached: Snapshot? = null
+
     fun compute(db: PortfolioDb, moverThresholdPct: Double = 4.0): Snapshot? {
         val instruments = db.instruments().associateBy { it.isin }
         val trades = db.trades()
@@ -305,7 +308,180 @@ object PortfolioAnalytics {
             benchValue = benchInr[last], inflValue = inflTerm,
             holdings = holdings,
             movers = movers,
+        ).also { cached = it }
+    }
+
+    // ---------- single-holding detail (native currency throughout) ----------
+
+    data class TradeDot(val idx: Int, val trade: Trade)
+
+    data class HoldingDetail(
+        val instrument: Instrument, val bucket: Bucket, val sector: String,
+        val days: LongArray,
+        val price: DoubleArray,        // native close, NaN where unknown
+        val value: DoubleArray,        // qty × close
+        val invested: DoubleArray,     // net contributions, step series
+        val benchValue: DoubleArray,   // same cashflows into the bucket's index
+        val trades: List<Trade>,
+        val tradeDots: List<TradeDot>,
+        val qty: Double, val priceNow: Double, val valueNow: Double, val investedNow: Double,
+        val dayPct: Double,
+        val xirr: Double?, val benchXirr: Double?, val inflXirr: Double?,
+        /** label → (holding price return, index price return) over trailing window */
+        val trailing: List<Triple<String, Double?, Double?>>,
+    )
+
+    fun holdingDetail(db: PortfolioDb, isin: String): HoldingDetail? {
+        val inst = db.instruments().firstOrNull { it.isin == isin } ?: return null
+        val trades = db.trades().filter { it.isin == isin }.sortedBy { it.day }
+        if (trades.isEmpty()) return null
+        val b = bucketOf(inst)
+
+        val raw = db.priceSeries(inst.yahoo)
+        val bench = db.priceSeries(b.benchSymbol)
+        val fxRaw = db.priceSeries("USDINR=X")
+        val start = trades.first().day
+        val end = raw.lastOrNull()?.first ?: return null
+        if (end <= start) return null
+        val n = (end - start + 1).toInt()
+        val days = LongArray(n) { start + it }
+
+        fun ffill(series: List<Pair<Long, Double>>): DoubleArray {
+            val out = DoubleArray(n) { Double.NaN }
+            var lastV = Double.NaN
+            var idx = 0
+            // seed with the latest value on/before the window start
+            while (idx < series.size && series[idx].first <= start) { lastV = series[idx].second; idx++ }
+            out[0] = lastV
+            for (k in 1 until n) {
+                val day = days[k]
+                while (idx < series.size && series[idx].first <= day) { lastV = series[idx].second; idx++ }
+                out[k] = lastV
+            }
+            return out
+        }
+        val fx = ffill(fxRaw)
+        val px = ffill(raw).let { arr ->
+            if (isin == "GOLD") DoubleArray(n) { k -> arr[k] * fx[k] / OZ_TO_GRAM } else arr
+        }
+        val bx = ffill(bench)
+
+        val qty = DoubleArray(n)
+        val invested = DoubleArray(n)
+        val benchUnits = DoubleArray(n)
+        val flows = mutableListOf<Pair<Int, Double>>()
+        val dots = mutableListOf<TradeDot>()
+        for (t in trades) {
+            val k = (t.day - start).toInt().coerceIn(0, n - 1)
+            val sign = if (t.side == "buy") 1.0 else -1.0
+            qty[k] += sign * t.qty
+            val cash = sign * (t.qty * t.price + t.fee)
+            invested[k] += cash
+            flows.add(k to cash)
+            if (!bx[k].isNaN() && bx[k] > 0) benchUnits[k] += cash / bx[k]
+            dots.add(TradeDot(k, t))
+        }
+        for (k in 1 until n) { qty[k] += qty[k - 1]; invested[k] += invested[k - 1]; benchUnits[k] += benchUnits[k - 1] }
+
+        val value = DoubleArray(n) { k -> if (px[k].isNaN()) Double.NaN else qty[k] * px[k] }
+        val benchValue = DoubleArray(n) { k -> if (bx[k].isNaN()) Double.NaN else benchUnits[k] * bx[k] }
+
+        val last = n - 1
+        val valueNow = value[last].orZero()
+
+        fun xirr(terminal: Double): Double? {
+            if (terminal <= 0 || flows.isEmpty()) return null
+            val t0 = flows.minOf { it.first }
+            fun npv(rate: Double): Double {
+                var acc = 0.0
+                for ((k, c) in flows) acc += c / (1 + rate).pow((k - t0) / 365.25)
+                return acc - terminal / (1 + rate).pow((last - t0) / 365.25)
+            }
+            var lo = -0.9999; var hi = 20.0
+            if (npv(lo) * npv(hi) > 0) return null
+            repeat(120) {
+                val mid = (lo + hi) / 2
+                if (npv(lo) * npv(mid) <= 0) hi = mid else lo = mid
+            }
+            return (lo + hi) / 2
+        }
+        val cpiIdx = run {
+            val rates = CPI_RATES.getValue(b.cpi)
+            val lastRate = rates.values.last()
+            var level = 1.0
+            DoubleArray(n) { k ->
+                val y = LocalDate.ofEpochDay(days[k]).year
+                level *= (1 + (rates[y] ?: lastRate) / 100).pow(1 / 365.25)
+                level
+            }
+        }
+        val inflTerminal = flows.sumOf { (k, c) -> c * cpiIdx[last] / cpiIdx[k] }
+
+        var prevIdx = last
+        while (prevIdx > 0 && px[prevIdx] == px[prevIdx - 1]) prevIdx--
+        val prev = if (prevIdx > 0) px[prevIdx - 1] else Double.NaN
+        val dayPct = if (!px[last].isNaN() && !prev.isNaN() && prev > 0) (px[last] / prev - 1) * 100 else 0.0
+
+        val trailing = listOf("1M" to 30, "3M" to 91, "6M" to 182, "1Y" to 365, "3Y" to 1095)
+            .map { (label, back) ->
+                val k0 = last - back
+                if (k0 < 0) Triple(label, null, null)
+                else Triple(
+                    label,
+                    if (!px[k0].isNaN() && px[k0] > 0) px[last] / px[k0] - 1 else null,
+                    if (!bx[k0].isNaN() && bx[k0] > 0) bx[last] / bx[k0] - 1 else null,
+                )
+            }
+
+        return HoldingDetail(
+            instrument = inst, bucket = b, sector = SECTORS[inst.yahoo] ?: inst.type,
+            days = days, price = px, value = value, invested = invested, benchValue = benchValue,
+            trades = trades, tradeDots = dots,
+            qty = qty[last], priceNow = px[last].orZero(), valueNow = valueNow,
+            investedNow = invested[last],
+            dayPct = dayPct,
+            xirr = xirr(valueNow), benchXirr = xirr(benchValue[last].orZero()),
+            inflXirr = xirr(inflTerminal),
+            trailing = trailing,
         )
+    }
+
+    // ---------- price movement over an arbitrary window ----------
+
+    data class MoveRow(val holding: Holding, val movePct: Double, val spark: DoubleArray)
+
+    /** Native-currency price move per holding over the last [daysBack] days (1 = today's move). */
+    fun movement(db: PortfolioDb, snap: Snapshot, daysBack: Int): List<MoveRow> {
+        val n = snap.days.size
+        val last = n - 1
+        val fxRaw = db.priceSeries("USDINR=X")
+        fun ffill(series: List<Pair<Long, Double>>): DoubleArray {
+            val out = DoubleArray(n) { Double.NaN }
+            var lastV = Double.NaN
+            var idx = 0
+            for (k in 0 until n) {
+                while (idx < series.size && series[idx].first <= snap.days[k]) { lastV = series[idx].second; idx++ }
+                out[k] = lastV
+            }
+            return out
+        }
+        val fx = ffill(fxRaw)
+        return snap.holdings.map { h ->
+            val arr = ffill(db.priceSeries(h.instrument.yahoo)).let { raw ->
+                if (h.instrument.isin == "GOLD") DoubleArray(n) { k -> raw[k] * fx[k] / OZ_TO_GRAM } else raw
+            }
+            val window = max(daysBack, 7)          // a 1-day spark is a dot; show a week
+            var k0 = max(0, last - window)
+            while (k0 < last && (arr[k0].isNaN() || arr[k0] <= 0)) k0++
+            val spark = DoubleArray(last - k0 + 1) { i -> arr[k0 + i].orZero() }
+            val pct = if (daysBack <= 1) h.dayPct else run {
+                val s = max(0, last - daysBack)
+                var i = s
+                while (i < last && (arr[i].isNaN() || arr[i] <= 0)) i++
+                if (i < last && arr[i] > 0 && !arr[last].isNaN()) (arr[last] / arr[i] - 1) * 100 else 0.0
+            }
+            MoveRow(h, pct, spark)
+        }
     }
 
     private fun Double.orZero() = if (isNaN()) 0.0 else this

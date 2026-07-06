@@ -42,7 +42,15 @@
                     android:background="@drawable/bg_input_pill"
                     android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
-                    android:layout_marginEnd="8dp" />
+                    android:layout_marginEnd="4dp" />
+                <ImageButton
+                    android:id="@+id/btnAlerts"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_bell"
+                    android:background="@drawable/ripple_pill"
+                    android:contentDescription="Alerts"
+                    app:tint="@color/text_secondary" />
                 <ImageButton
                     android:id="@+id/btnSync"
                     android:layout_width="36dp"
@@ -271,6 +279,17 @@
                         android:layout_height="wrap_content"
                         android:textColor="@color/text_secondary"
                         android:textSize="11.5sp" />
+                    <TextView
+                        android:id="@+id/tvAllocZoom"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Zoom ›"
+                        android:textColor="@color/accent_emerald_light"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/ripple_group"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="6dp" />
                 </LinearLayout>
                 <LinearLayout
                     android:id="@+id/allocBar"
@@ -287,14 +306,30 @@
 
                 <View style="@style/PortfolioDivider" />
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="MOVEMENT"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.1" />
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="MOVEMENT"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1" />
+                    <TextView
+                        android:id="@+id/tvMoversAll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="All ›"
+                        android:textColor="@color/accent_emerald_light"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/ripple_group"
+                        android:paddingHorizontal="6dp" />
+                </LinearLayout>
                 <LinearLayout
                     android:id="@+id/layoutMovers"
                     android:layout_width="match_parent"
@@ -323,6 +358,17 @@
                         android:layout_height="wrap_content"
                         android:textColor="@color/text_secondary"
                         android:textSize="11.5sp" />
+                    <TextView
+                        android:id="@+id/tvHoldingsAll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="All ›"
+                        android:textColor="@color/accent_emerald_light"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/ripple_group"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="6dp" />
                 </LinearLayout>
                 <LinearLayout
                     android:id="@+id/layoutHoldings"

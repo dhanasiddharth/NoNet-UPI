@@ -56,10 +56,14 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
                       val area: Boolean = false)
 
     var yFormatter: (Double) -> String = { "%.0f".format(it) }
+    /** false (default): values ≤ 0 are "no data" gaps. true: only NaN is a gap. */
+    var allowNegative = false
     private var series: List<Series> = emptyList()
     private var xLabels: List<String> = emptyList()
+    private var dots: List<Pair<Int, Double>> = emptyList()
 
     private val gridPaint = Paint().apply { color = 0xFF1B2420.toInt(); strokeWidth = dp(1f) }
+    private val zeroPaint = Paint().apply { color = 0xFF33403A.toInt(); strokeWidth = dp(1f) }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.text_secondary); textSize = dp(9.5f)
     }
@@ -69,17 +73,20 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     private val areaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    fun set(series: List<Series>, xLabels: List<String>) {
+    fun set(series: List<Series>, xLabels: List<String>, dots: List<Pair<Int, Double>> = emptyList()) {
         this.series = series.map { s -> s.copy(values = s.values.copyOf()) }
         this.xLabels = xLabels
+        this.dots = dots
         invalidate()
     }
 
+    private fun ok(v: Double) = if (allowNegative) !v.isNaN() else v > 0
+
     override fun onDraw(canvas: Canvas) {
-        val valid = series.flatMap { s -> s.values.filter { it > 0 } }
+        val valid = series.flatMap { s -> s.values.filter { ok(it) } }
         if (valid.isEmpty()) return
         var lo = valid.min(); var hi = valid.max()
-        val span = (hi - lo).takeIf { it > 0 } ?: (hi * 0.1 + 1)
+        val span = (hi - lo).takeIf { it > 0 } ?: (kotlin.math.abs(hi) * 0.1 + 1)
         lo -= span * 0.06; hi += span * 0.06
 
         val padB = dp(16f); val padT = dp(4f); val padR = dp(44f)
@@ -92,6 +99,11 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText(yFormatter(gv), width.toFloat() - dp(2f), y(gv) + dp(3f), textPaint)
         }
+        if (allowNegative && lo < 0 && hi > 0) {
+            canvas.drawLine(0f, y(0.0), w + dp(4f), y(0.0), zeroPaint)
+            textPaint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(yFormatter(0.0), width.toFloat() - dp(2f), y(0.0) + dp(3f), textPaint)
+        }
 
         for (s in series) {
             val vals = s.values
@@ -99,7 +111,7 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             fun x(i: Int) = w * i / (vals.size - 1f)
             val path = Path(); var started = false
             for (i in vals.indices) {
-                if (vals[i] <= 0) continue
+                if (!ok(vals[i])) continue
                 if (!started) { path.moveTo(x(i), y(vals[i])); started = true }
                 else path.lineTo(x(i), y(vals[i]))
             }
@@ -117,9 +129,22 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             // endpoint dot on the primary (first) series
             if (s === series.first()) {
                 var lastIdx = vals.size - 1
-                while (lastIdx > 0 && vals[lastIdx] <= 0) lastIdx--
+                while (lastIdx > 0 && !ok(vals[lastIdx])) lastIdx--
                 dotPaint.color = s.color
                 canvas.drawCircle(x(lastIdx), y(vals[lastIdx]), dp(3.4f), dotPaint)
+            }
+        }
+
+        // marker dots (e.g. buys) positioned against the first series' index space
+        series.firstOrNull()?.let { s ->
+            if (s.values.size < 2) return@let
+            fun x(i: Int) = w * i / (s.values.size - 1f)
+            for ((i, v) in dots) {
+                if (i < 0 || i >= s.values.size || !ok(v)) continue
+                dotPaint.color = 0xFF0A0F0D.toInt()
+                canvas.drawCircle(x(i), y(v), dp(4.2f), dotPaint)
+                dotPaint.color = s.color
+                canvas.drawCircle(x(i), y(v), dp(2.8f), dotPaint)
             }
         }
 
