@@ -41,6 +41,11 @@
 
   .duo{display:grid; grid-template-columns:auto 1fr; gap:40px; align-items:start}
   @media(max-width:900px){.duo{grid-template-columns:1fr}}
+  /* multi-phone sections: phones in a row, notes flow in columns beneath */
+  .duo.wide{grid-template-columns:1fr}
+  .duo.wide .notes{position:static; max-width:none; column-width:330px; column-gap:44px; margin-top:8px}
+  .duo.wide .notes h3{break-after:avoid}
+  .duo.wide .notes ul{break-inside:avoid}
   .notes{position:sticky; top:28px; max-width:420px}
   .notes h3{font-size:15px; font-weight:700; margin:22px 0 4px}
   .notes p{font-size:14px; margin:4px 0}
@@ -87,7 +92,8 @@
   .tile .d{font-size:11px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
   .d.up{color:var(--good)} .d.down{color:var(--bad)} .d.flat{color:var(--muted)}
 
-  .card{background:var(--surface); border:1px solid var(--stroke); border-radius:var(--radius); padding:14px; margin-top:14px}
+  /* sections are part of the surface — label + content + hairline rhythm, no boxes */
+  .card{background:none; border:none; border-top:1px solid var(--stroke); border-radius:0; padding:16px 0 2px; margin-top:16px}
   .card .head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
   .card .head .label{margin:0}
 
@@ -123,23 +129,64 @@
   .arow .ap{color:var(--muted); font-variant-numeric:tabular-nums; width:52px; text-align:right}
   .arow .av{font-weight:700; font-variant-numeric:tabular-nums; width:80px; text-align:right}
 
-  /* XIRR card */
-  .xr{margin-top:6px}
-  .xrow{padding:9px 2px; border-top:1px solid var(--stroke)}
-  .xrow:first-child{border-top:none}
-  .xrow .top{display:flex; align-items:center; gap:8px; font-size:13px}
-  .xrow .top .xn{font-weight:700; flex:1}
-  .xrow .top .bm{font-size:11px; color:var(--muted)}
-  .bars{display:grid; grid-template-columns:1fr; gap:4px; margin-top:7px}
-  .bar{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
-  .bar .track{flex:1; height:10px; position:relative; background:var(--bg); border-radius:5px; overflow:hidden}
-  .bar .fill{position:absolute; top:0; bottom:0; border-radius:5px}
-  .bar .bl{width:64px; flex:none}
-  .bar .bv{width:52px; text-align:right; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums}
-  .delta{margin-left:auto}
+  /* dot-plot benchmark card: one shared % axis, three markers per row */
+  .dp{margin-top:4px}
+  .dprow{display:flex; align-items:center; gap:10px; padding:11px 2px; border-top:1px solid var(--stroke)}
+  .dprow:first-child{border-top:none}
+  .dprow .dl{width:66px; flex:none}
+  .dprow .dl b{font-size:12.5px; display:block}
+  .dprow .dl span{font-size:10px; color:var(--muted); display:block; margin-top:1px}
+  .dptrack{flex:1; height:22px; position:relative}
+  .dptrack .axis{position:absolute; left:0; right:0; top:50%; height:2px; background:#1B2420; border-radius:1px}
+  .dptrack .zero{position:absolute; top:3px; bottom:3px; width:1px; background:#33403A}
+  .dptrack .mk{position:absolute; top:50%; transform:translate(-50%,-50%)}
+  .mk.infl{width:2.5px; height:13px; border-radius:2px; background:var(--amber); opacity:.9}
+  .mk.idx{width:9px; height:9px; border-radius:50%; border:2px solid #7A8A82; background:var(--surface)}
+  .mk.you{width:11px; height:11px; border-radius:50%; box-shadow:0 0 0 2px var(--surface)}
+  .dprow .dv{width:74px; flex:none; text-align:right}
+  .dprow .dv b{font-size:13px; font-variant-numeric:tabular-nums; display:block}
+  .dprow .dv .chip{margin-top:2px; font-size:10px; padding:1px 6px}
+  .dplegend{display:flex; gap:14px; font-size:10.5px; color:var(--muted); margin:2px 2px 6px}
+  .dplegend span{display:inline-flex; align-items:center; gap:5px}
+
+  /* compact allocation bar (overview) */
+  .abar{display:flex; height:14px; border-radius:7px; overflow:hidden; gap:2px; margin-top:10px}
+  .abar i{display:block; height:100%}
+  .akey{display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; margin-top:10px}
+  .akey .arow{border-top:none; padding:3px 0; font-size:12px}
+  .openrow{display:flex; align-items:center; gap:8px; margin-top:6px; padding:9px 2px;
+    font-size:12.5px; font-weight:700; color:var(--brand); cursor:pointer}
+  .openrow span{flex:1}
+
+  /* zoomable treemap (allocation screen) */
+  #tm2{position:relative; height:300px; margin-top:8px}
+  .tnode.zoomin{animation:zoomin .18s ease-out}
+  @keyframes zoomin{from{transform:scale(.86); opacity:.4} to{transform:scale(1); opacity:1}}
+  .peek{position:absolute; z-index:5; background:#0F1613; border:1px solid var(--stroke); border-radius:10px;
+    padding:7px 10px; font-size:11.5px; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.5); display:none}
+  .peek b{display:block; font-size:12px}
+  .peek span{color:var(--muted)}
+
+  /* holdings movement screen */
+  .trend2{display:grid; grid-template-columns:1fr 1fr; gap:0 16px}
+  .trow2{display:flex; align-items:center; gap:7px; padding:6px 0; font-size:12px; cursor:pointer}
+  .trow2 .tn{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600}
+  .trow2 .tv{font-weight:700; font-variant-numeric:tabular-nums}
+  .schip{font-size:11px; font-weight:700; color:var(--muted); background:var(--bg); border:1px solid var(--stroke); border-radius:999px; padding:3px 9px; cursor:pointer}
+  .schip.on{color:var(--ink); border-color:var(--muted)}
+  .wbar{height:3px; border-radius:2px; background:var(--raised); margin-top:5px; overflow:hidden}
+  .wbar i{display:block; height:100%; background:#3A4540}
+
+  /* alert rules cascade */
+  .cascade{margin-top:10px}
+  .crule{display:flex; align-items:center; gap:8px; padding:9px 2px; border-top:1px solid var(--stroke); font-size:12.5px}
+  .crule:first-child{border-top:none}
+  .crule .lvl{font-size:9.5px; font-weight:800; letter-spacing:.08em; color:var(--muted); width:56px; flex:none; text-transform:uppercase}
+  .crule .cn{font-weight:600; flex:1}
+  .crule .cv{font-weight:800; font-variant-numeric:tabular-nums; color:var(--brand)}
 
   /* alerts */
-  .rule{display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; font-size:12.5px; margin-top:8px}
+  .rule{display:flex; align-items:center; gap:10px; padding:9px 2px; font-size:12.5px; margin-top:2px; border-top:1px solid var(--stroke)}
   .rule b{color:var(--ink)}
   .rule .edit{margin-left:auto; color:var(--brand); font-weight:700; cursor:pointer; font-size:12px}
   .alert{display:flex; gap:10px; padding:9px 2px; border-top:1px solid var(--stroke); font-size:12.5px; align-items:center}
@@ -229,7 +276,7 @@
   <section>
     <h2>The Money tab</h2>
     <p>Value first, performance second, decisions third — one scroll, no sub-menus.</p>
-    <div class="duo">
+    <div class="duo wide">
       <div class="phones"><div class="phone"><div class="screen" id="scrA">
         <div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
         <div class="content" id="tabA">
@@ -267,34 +314,33 @@
           </div>
 
           <div class="card">
-            <div class="head"><span class="label">Allocation</span>
-              <span class="rd num" id="allocTotal" style="font-size:11.5px;color:var(--muted)"></span></div>
-            <div class="seg" id="allocSeg">
-              <button data-m="market" class="on">Market</button>
-              <button data-m="sector">Sector</button>
-              <button data-m="holding">Holdings</button>
-            </div>
-            <div class="crumb" id="crumb"></div>
-            <div id="treemap"></div>
-            <div class="alist" id="alist"></div>
+            <div class="head"><span class="label">Beating the market &amp; inflation?</span></div>
+            <div class="dplegend"><span><i class="mk you" style="position:static;transform:none;background:var(--brand);width:9px;height:9px;display:inline-block"></i>You</span>
+              <span><i class="mk idx" style="position:static;transform:none;display:inline-block"></i>Index</span>
+              <span><i class="mk infl" style="position:static;transform:none;display:inline-block;height:11px"></i>Inflation</span>
+              <span style="margin-left:auto">XIRR, own currency</span></div>
+            <div class="dp" id="dotplot"></div>
+            <div id="xirrHead" style="font-size:11.5px; margin:8px 2px 0; color:var(--muted)"></div>
           </div>
 
           <div class="card">
-            <div class="head"><span class="label">You vs the index</span><span class="rd" style="font-size:11px;color:var(--muted)">same cashflows, same dates</span></div>
-            <div id="xirrHead" style="font-size:13px; margin:2px 2px 6px; color:var(--muted)"></div>
-            <div class="xr" id="xirr"></div>
+            <div class="head"><span class="label">Allocation</span>
+              <span class="rd num" id="allocTotal" style="font-size:11.5px;color:var(--muted)"></span></div>
+            <div class="abar" id="abar"></div>
+            <div class="akey" id="akey"></div>
+            <div class="openrow" id="openAlloc"><span>Open allocation</span>›</div>
           </div>
 
           <div class="card">
             <div class="head"><span class="label">Movement alerts</span><span class="chip flat" style="font-size:10.5px">event-driven · no digests</span></div>
-            <div class="rule"><span style="flex:1">Any holding moves <b>±4%</b> in a day</span> <span class="edit">Edit</span></div>
-            <div class="rule" style="margin-top:6px">3 holdings have custom thresholds <span class="edit">Manage</span></div>
-            <div id="alerts" style="margin-top:6px"></div>
+            <div id="alerts" style="margin-top:2px"></div>
+            <div class="openrow" id="openAlerts"><span>Rules — default ±4% · 5 overrides</span>›</div>
           </div>
 
           <div class="card">
-            <div class="head"><span class="label">Holdings</span><span class="rd" style="font-size:11px;color:var(--muted)" id="hcount"></span></div>
+            <div class="head"><span class="label">Top holdings</span><span class="rd" style="font-size:11px;color:var(--muted)" id="hcount"></span></div>
             <div id="holdings"></div>
+            <div class="openrow" id="openAll"><span>All positions</span>›</div>
           </div>
 
           <div class="navbar">
@@ -302,6 +348,39 @@
             <div class="nv on"><span class="pill"><span class="ic">📈</span></span>Money</div>
             <div class="nv"><span class="ic">☰</span>Bank</div>
             <div class="nv"><span class="ic">···</span>More</div>
+          </div>
+        </div>
+      </div></div>
+
+      <div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
+        <div class="content">
+          <div class="backrow"><span class="bk">‹</span><span class="t">Allocation</span>
+            <span class="rd num" id="allocTotal2" style="font-size:11.5px;color:var(--muted)"></span></div>
+          <div class="seg" id="allocSeg" style="margin-top:12px">
+            <button data-m="market" class="on">Market</button>
+            <button data-m="sector">Sector</button>
+            <button data-m="holding">Holdings</button>
+          </div>
+          <div class="crumb" id="crumb"></div>
+          <div id="tm2"></div>
+          <div class="peek" id="peek"></div>
+          <div class="alist" id="alist"></div>
+        </div>
+      </div></div>
+
+      <div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
+        <div class="content" id="tabH">
+          <div class="backrow"><span class="bk">‹</span><span class="t">Holdings</span>
+            <span class="rd" id="hcount2" style="font-size:11.5px;color:var(--muted)"></span></div>
+          <div class="chips" id="hperiods" style="margin-top:12px"></div>
+          <div class="card" style="border-top:none;padding-top:10px">
+            <div class="head"><span class="label">Trending</span><span class="rd" id="trendPeriod" style="font-size:11px;color:var(--muted)"></span></div>
+            <div class="trend2" id="trend"></div>
+          </div>
+          <div class="card">
+            <div class="head"><span class="label">All positions</span>
+              <div class="chips" id="hsorts"></div></div>
+            <div id="hfull"></div>
           </div>
         </div>
       </div></div></div>
@@ -325,11 +404,17 @@
           <li>The change chip separates growth from contributions ("added ₹…") — a value chart that counts deposits as gains is the classic portfolio-app lie.</li>
           <li>Ranges are windows over locally stored daily bars — switching is instant and offline.</li>
         </ul>
-        <h3>Allocation (the Google-Finance upgrade)</h3>
+        <h3>One screen, then depth</h3>
         <ul>
-          <li>A drillable <strong>treemap</strong> instead of a donut: area = weight, so a 26% Gold position is felt, not read from a legend. Market → sector → holding, breadcrumb to climb back.</li>
-          <li>Tiles keep their market's hue; the list below always mirrors the current level with exact ₹ and %.</li>
-          <li>Donuts hide small slices and force color-matching across a legend — the treemap direct-labels everything ≥ ~5% and groups the tail into "Other".</li>
+          <li>The overview is deliberately short: hero → tiles → chart → beat-check → allocation summary → alert feed → top-5. Everything heavy (full treemap, all positions, alert rules) is a <strong>pushed sub-screen</strong> behind a chevron row — same navigation grammar as the rest of the app.</li>
+          <li><strong>Beating the market &amp; inflation</strong> is a dot plot on one shared axis: amber tick = inflation, hollow dot = index, filled dot = you. Right of both dots = real outperformance; between them = beating inflation but not the market. The top row prices everything against <em>India CPI</em> — the inflation your money actually lives in.</li>
+          <li>No boxed cards — sections sit on the surface with hairline dividers, matching the Pay and Bank tabs.</li>
+        </ul>
+        <h3>Allocation screen (the Google-Finance upgrade)</h3>
+        <ul>
+          <li><strong>Tap = zoom.</strong> Any block with depth zooms to fill the map (market → sector → holding); on device the same stack answers pinch-to-zoom. Breadcrumb climbs back.</li>
+          <li>Blocks too small to label: <strong>touch peeks a label</strong> (name · % · value), and the tail is an explicit "Other · n" block that zooms into its own map — nothing is invisible.</li>
+          <li>The list under the map always mirrors the zoom level with exact figures.</li>
         </ul>
       </aside>
     </div>
@@ -339,7 +424,7 @@
   <section>
     <h2>Holding detail &amp; the alert flow</h2>
     <p>Tap any holding on the Money tab — the detail phone follows. Alerts are per-line-item and only fire on significant single-day moves.</p>
-    <div class="duo">
+    <div class="duo wide">
       <div class="phones">
         <div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>▲ ▮▮▮ 100</span></div>
           <div class="content" id="tabB"></div>
@@ -361,6 +446,18 @@
               <div class="nb" id="nf2b">—</div>
               <div class="acts"><span>View position</span><span>Mute 1w</span></div>
             </div>
+            <div class="card">
+              <div class="head"><span class="label">Rules</span><span class="rd" style="font-size:11px;color:var(--muted)">most specific wins</span></div>
+              <div class="cascade">
+                <div class="crule"><span class="lvl">Default</span><span class="cn">Any holding, daily move</span><span class="cv m">±4%</span></div>
+                <div class="crule"><span class="lvl">Market</span><span class="cn">Crypto</span><span class="cv m">±8%</span></div>
+                <div class="crule"><span class="lvl">Market</span><span class="cn">Gold</span><span class="cv m">±2.5%</span></div>
+                <div class="crule"><span class="lvl">Sector</span><span class="cn">Semiconductors</span><span class="cv m">±6%</span></div>
+                <div class="crule"><span class="lvl">Sector</span><span class="cn">Index funds · all markets</span><span class="cv m">±2.5%</span></div>
+                <div class="crule"><span class="lvl">Holding</span><span class="cn">Netflix</span><span class="cv m">±6%</span></div>
+              </div>
+              <div class="openrow"><span>Add rule — market, sector or holding</span>+</div>
+            </div>
             <div class="sheet">
               <div class="label">Threshold · Netflix</div>
               <div style="font-size:13.5px; font-weight:700; margin-top:8px">Alert on a daily move beyond <span style="color:var(--brand)">±6%</span></div>
@@ -375,17 +472,23 @@
       </div>
 
       <aside class="notes">
+        <h3>Holdings screen — movement first</h3>
+        <ul>
+          <li>Period chips (1D–1Y) re-scope everything: the <strong>Trending up / down</strong> strips, each row's sparkline and move %.</li>
+          <li>Sort by Value, Move %, Invested or XIRR. "Invested" answers <em>how are the most-invested ones moving</em> — each row also carries its portfolio weight as a thin bar.</li>
+          <li>Every row still shows position size in its own currency; tap opens the detail phone.</li>
+        </ul>
         <h3>Holding detail</h3>
         <ul>
-          <li>Price history with <strong>your buys marked on the line</strong> — cost-versus-price is instantly visible. Sells get hollow markers.</li>
-          <li>Stat grid: units, invested, value, day move, <strong>XIRR of this position</strong>, and what the same cashflows in its market index returned.</li>
-          <li>Trade list is the receipt-feed pattern from the Pay tab — same rhythm, same date grouping.</li>
+          <li>The chart is your <strong>position's value vs the same cashflows in its benchmark</strong> (gray) with invested dotted — three lines, one verdict. Buys are dots on your line; sells hollow.</li>
+          <li><strong>Rolling price returns</strong> (3M / 1Y / 3Y-annualized) show momentum without another graph.</li>
+          <li>Stat grid closes the loop: XIRR, <strong>vs its index in pp</strong>, and <strong>vs its market's CPI in pp</strong> — is this line item beating inflation?</li>
         </ul>
         <h3>Alert engine</h3>
         <ul>
-          <li>Rule = <code>|close ÷ prev-close − 1| ≥ threshold</code> per holding, evaluated after the daily sync and on any manual refresh. Default ±4%, per-item override (crypto wants ±8%, index funds ±2.5%).</li>
-          <li>Notification says <em>what moved, how much, and the position size</em> — enough to decide whether to open the app.</li>
-          <li>Deliberately no schedules: your ask was flags on significant movement only. The 90-day backtest on your real holdings: <strong id="acount">—</strong> alerts at ±4% — roughly one every other day; at ±6% it's ~2/week.</li>
+          <li>Rules cascade — <strong>default → market → sector → holding</strong>, most specific wins. Crypto runs hot (±8%), index funds quiet (±2.5%).</li>
+          <li>Rule = <code>|close ÷ prev-close − 1| ≥ threshold</code>, evaluated after each sync. Notification carries what moved, by how much, and position size.</li>
+          <li>No schedules. The 90-day backtest on your holdings: <strong id="acount">—</strong> alerts at ±4%; a ±6% default with sector overrides lands ~2/week.</li>
         </ul>
       </aside>
     </div>
@@ -612,23 +715,32 @@ function renderRanges(){
 $('cmpBtn').onclick=()=>{ compare=!compare; $('cmpBtn').classList.toggle('on',compare); renderChart(); };
 $('eyeBtn').onclick=()=>{ masked=!masked; document.body.classList.toggle('masked',masked); $('eyeBtn').textContent=masked?'🙈':'👁'; };
 
-/* ---------- allocation treemap ---------- */
-let allocMode='market', drill=null; // drill = {level:'bucket'|'sector', key}
+/* ---------- allocation: compact bar (overview) + zoomable treemap (own screen) ---------- */
+let allocMode='market';
+let zoomStack=[];   // each level: {label, nodes-producer key}
+function groupBy(items,keyf,colorf){ const m={};
+  for(const h of items){ const k=keyf(h); (m[k]=m[k]||{key:k,value:0,items:[]}).value+=h.valueInr; m[k].items.push(h);}
+  return Object.values(m).sort((a,b)=>b.value-a.value)
+    .map(g=>({...g,label:g.key,color:colorf(g)})); }
+function holdingNodes(items,color){
+  // label what's readable; the tail zooms via an explicit "Other" block
+  const top=items.slice(0,9), rest=items.slice(9);
+  const nodes=top.map(h=>({key:h.isin,label:h.name,value:h.valueInr,
+    color:color||BC[h.bucket],items:[h]}));
+  if(rest.length) nodes.push({key:'__other',label:'Other · '+rest.length,
+    value:rest.reduce((a,h)=>a+h.valueInr,0),color:'#3A4540',items:rest,isOther:true});
+  return nodes;
+}
 function allocNodes(){
   const H=D.holdings;
-  const group=(items,keyf)=>{ const m={};
-    for(const h of items){ const k=keyf(h); (m[k]=m[k]||{key:k,value:0,items:[],bucket:h.bucket}).value+=h.valueInr; m[k].items.push(h);}
-    return Object.values(m).sort((a,b)=>b.value-a.value); };
-  if(allocMode==='market' && !drill) return group(H,h=>h.bucket).map(g=>({...g,label:g.key,color:BC[g.key]}));
-  if(allocMode==='market' && drill)  return group(H.filter(h=>h.bucket===drill.key),h=>h.sector)
-        .map(g=>({...g,label:g.key,color:BC[drill.key]}));
-  if(allocMode==='sector' && !drill) return group(H,h=>h.sector).map(g=>({...g,label:g.key,color:BC[g.items[0].bucket]}));
-  if(allocMode==='sector' && drill)  return drill.items.map(h=>({key:h.isin,label:h.name,value:h.valueInr,color:BC[h.bucket],items:[h]}));
-  // holdings: top 11 + other
-  const hs=[...H]; const top=hs.slice(0,11), rest=hs.slice(11);
-  const nodes=top.map(h=>({key:h.isin,label:h.name,value:h.valueInr,color:BC[h.bucket],items:[h]}));
-  if(rest.length) nodes.push({key:'other',label:'Other · '+rest.length,value:rest.reduce((a,h)=>a+h.valueInr,0),color:'#3A4540',items:rest});
-  return nodes;
+  const top=zoomStack[zoomStack.length-1];
+  if(top) return top.isOther? holdingNodes(top.items)
+    : (allocMode==='market' && zoomStack.length===1)
+      ? groupBy(top.items,h=>h.sector,g=>BC[g.items[0].bucket])
+      : holdingNodes(top.items, top.color);
+  if(allocMode==='market') return groupBy(H,h=>h.bucket,g=>BC[g.key]);
+  if(allocMode==='sector') return groupBy(H,h=>h.sector,g=>BC[g.items[0].bucket]);
+  return holdingNodes([...H]);
 }
 /* simple slice-and-dice alternating squarify-ish layout */
 function layout(nodes,x,y,w,h,out){
@@ -643,81 +755,130 @@ function layout(nodes,x,y,w,h,out){
   if(w>=h){ layout(A,x,y,w*fa,h,out); layout(B,x+w*fa,y,w*(1-fa),h,out); }
   else    { layout(A,x,y,w,h*fa,out); layout(B,x,y+h*fa,w,h*(1-fa),out); }
 }
+function nodeAmt(n){
+  if(n.items && n.items.length===1) return money(n.items[0].value,n.items[0].currency);
+  if(BC[n.key] && D.stats[n.key]) return money(D.stats[n.key].value,D.stats[n.key].currency);
+  const ccy=n.items?.[0]?.currency;   // sector groups are single-market
+  return (n.items && n.items.every(h=>h.currency===ccy))
+    ? money(n.items.reduce((a,h)=>a+h.value,0),ccy) : cr(n.value);
+}
+const PORTF_TOTAL=D.holdings.reduce((a,h)=>a+h.valueInr,0);
+
+/* overview: stacked bar + key, no treemap — depth lives on the Allocation screen */
+function renderAllocBar(){
+  const nodes=groupBy(D.holdings,h=>h.bucket,g=>BC[g.key]);
+  const bar=$('abar'), key=$('akey'); bar.innerHTML=''; key.innerHTML='';
+  for(const n of nodes){
+    const p=n.value/PORTF_TOTAL;
+    const seg=document.createElement('i');
+    seg.style.cssText=`width:${(p*100).toFixed(2)}%;background:${n.color}`;
+    bar.appendChild(seg);
+    const row=document.createElement('div'); row.className='arow';
+    row.innerHTML=`<i style="background:${n.color}"></i><span class="an">${n.label}</span>
+      <span class="ap num">${(p*100).toFixed(1)}%</span><span class="av m num">${nodeAmt(n)}</span>`;
+    key.appendChild(row);
+  }
+  $('allocTotal').textContent=cr(PORTF_TOTAL)+' total';
+}
+
+/* allocation screen: tap = zoom in (whole level re-renders inside the tapped
+   block's frame); pinch-to-zoom maps to the same stack on device. Unlabeled
+   small blocks: hover/tap peeks a label; the tail is an explicit “Other” block
+   that zooms into its own map. */
 function renderAlloc(){
-  const tm=$('treemap'); tm.innerHTML='';
+  const tm=$('tm2'); if(!tm) return; tm.innerHTML='';
   const nodes=allocNodes(); const total=nodes.reduce((a,n)=>a+n.value,0);
-  const W=tm.clientWidth||321, H=tm.clientHeight||224;
+  const W=tm.clientWidth||321, H=tm.clientHeight||300;
   const rects=[]; layout(nodes,0,0,W,H,rects);
+  const peek=$('peek');
   for(const r of rects){
-    const d=document.createElement('div'); d.className='tnode';
+    const d=document.createElement('div'); d.className='tnode zoomin';
     const p=r.value/total;
     d.style.cssText=`left:${r.x+1}px;top:${r.y+1}px;width:${r.w-2}px;height:${r.h-2}px;
       background:color-mix(in srgb, ${r.color} ${Math.round(26+p*60)}%, #131A16)`;
-    if(r.w>54 && r.h>30){
-      const one=r.items && r.items.length===1;
-      const amt=r.h>56? `<span style="opacity:.75; font-weight:600"> · ${one? money(r.items[0].value,r.items[0].currency) : (BC[r.key]&&D.stats[r.key]? money(D.stats[r.key].value,D.stats[r.key].currency):'')}</span>`:'';
+    const labeled=r.w>54 && r.h>30;
+    if(labeled){
+      const amt=r.h>56? `<span style="opacity:.75; font-weight:600"> · ${nodeAmt(r)}</span>`:'';
       d.innerHTML=`<div class="tl">${r.label}</div><div class="tp m num">${(p*100).toFixed(p<0.1?1:0)}%${amt}</div>`;
     }
+    d.onpointerenter=ev=>{ if(labeled) return;
+      peek.innerHTML=`<b>${r.label}</b><span class="m num">${(p*100).toFixed(1)}% · ${nodeAmt(r)}</span>`;
+      peek.style.display='block';
+      peek.style.left=Math.min(r.x+6, W-150)+'px'; peek.style.top=(r.y+r.h/2+42)+'px'; };
+    d.onpointerleave=()=>{ peek.style.display='none'; };
     d.onclick=()=>{
-      if(allocMode!=='holding' && !drill){ drill={key:r.key, items:r.items}; renderAlloc(); }
-      else if(r.items && r.items.length===1){ openHolding(r.items[0].isin); }
+      peek.style.display='none';
+      const zoomable=r.isOther || (r.items && r.items.length>1);
+      if(zoomable){ zoomStack.push(r); renderAlloc(); }
+      else if(r.items) openHolding(r.items[0].isin);
     };
     tm.appendChild(d);
   }
-  $('crumb').innerHTML = drill? `<b id="crumbBack">‹ All</b> · ${drill.key}` :
-     (allocMode==='holding'?'Top holdings by value · tap to open':'Tap a block to drill in');
-  const cb=$('crumbBack'); if(cb) cb.onclick=()=>{ drill=null; renderAlloc(); };
-  // mirror list — % compares slices (₹-weighted); amounts read native
+  const path=['All',...zoomStack.map(z=>z.label)];
+  $('crumb').innerHTML = zoomStack.length?
+      `<b id="crumbBack">‹ ${path[path.length-2]}</b> · ${path[path.length-1]}`
+    : 'Tap a block to zoom in · small blocks peek on touch';
+  const cb=$('crumbBack'); if(cb) cb.onclick=()=>{ zoomStack.pop(); renderAlloc(); };
   const list=$('alist'); list.innerHTML='';
-  for(const n of nodes.slice(0,6)){
-    const p=(n.value/total*100);
-    let amt;
-    if(n.items && n.items.length===1) amt=money(n.items[0].value,n.items[0].currency);
-    else if(BC[n.key]) amt=money(D.stats[n.key].value,D.stats[n.key].currency);
-    else { const ccy=n.items?.[0]?.currency;   // sector groups are single-market
-      amt=(n.items&&n.items.every(h=>h.currency===ccy))
-        ? money(n.items.reduce((a,h)=>a+h.value,0),ccy) : cr(n.value); }
+  for(const n of nodes){
     const row=document.createElement('div'); row.className='arow';
     row.innerHTML=`<i style="background:${n.color}"></i><span class="an">${n.label}</span>
-      <span class="ap num">${p.toFixed(1)}%</span><span class="av m num">${amt}</span>`;
+      <span class="ap num">${(n.value/total*100).toFixed(1)}%</span><span class="av m num">${nodeAmt(n)}</span>`;
     list.appendChild(row);
   }
-  $('allocTotal').textContent=cr(total)+' total';
+  const t2=$('allocTotal2'); if(t2) t2.textContent=cr(total)+(zoomStack.length?' in view':' total');
 }
 document.querySelectorAll('#allocSeg button').forEach(b=>{
   b.onclick=()=>{ document.querySelectorAll('#allocSeg button').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on'); allocMode=b.dataset.m; drill=null; renderAlloc(); };
+    b.classList.add('on'); allocMode=b.dataset.m; zoomStack=[]; renderAlloc(); };
 });
 
-/* ---------- XIRR card ---------- */
-function renderXirr(){
-  const gain=OV.value-OV.benchValue;
-  $('xirrHead').innerHTML=`Same cashflows in the indexes would be <b class="m num" style="color:var(--ink)">${cr(OV.benchValue)}</b> —
-    you're <b class="m num" style="color:${gain>=0?'var(--good)':'var(--bad)'}">${cr(Math.abs(gain))} ${gain>=0?'ahead':'behind'}</b>.
-    <span style="font-size:11px">Buckets compare in their own currency and market.</span>`;
-  const rows=[['Overall',OV,null,BRAND], ...['India','US','Gold','Crypto'].map(b=>[b,D.stats[b],
-      D.stats[b].benchmark+(D.stats[b].currency==='USD'?' · $':' · ₹'),BC[b]])];
-  const vals=rows.flatMap(([,s])=>[s.xirr||0,s.benchXirr||0]);
-  const maxV=Math.max(...vals,0.01), minV=Math.min(...vals,0);
-  const zero=(-minV)/(maxV-minV)*100;   // shared zero anchor so negatives read
-  const wrap=$('xirr'); wrap.innerHTML='';
-  for(const [name,s,bm,color] of rows){
+/* ---------- dot plot: You vs index vs inflation, one shared axis ---------- */
+function renderDots(){
+  const rows=[
+    ['All', OV, 'blend · IN CPI', BRAND],
+    ...['India','US','Gold','Crypto'].map(b=>{const s=D.stats[b];
+      return [b, s, `${s.benchmark.replace(' 500','').replace(' 50','')} · ${s.currency==='USD'?'US':'IN'} CPI`, BC[b]];})];
+  const vals=rows.flatMap(([,s])=>[s.xirr||0,s.benchXirr||0,s.inflXirr||0]);
+  const maxV=Math.max(...vals)+0.03, minV=Math.min(...vals,0)-0.02;
+  const X=v=>((v-minV)/(maxV-minV)*100).toFixed(2)+'%';
+  const wrap=$('dotplot'); wrap.innerHTML='';
+  for(const [name,s,sub,color] of rows){
     const d=(s.xirr-s.benchXirr)*100;
-    const row=document.createElement('div'); row.className='xrow';
-    const bar=(v,c,lbl)=>{
-      const w=Math.abs(v)/(maxV-minV)*100;
-      const pos=v>=0? `left:${zero}%`:`left:${zero-w}%`;
-      return `<div class="bar"><span class="bl">${lbl}</span>
-        <span class="track"><i style="position:absolute;left:${zero}%;top:0;bottom:0;width:1px;background:#33403A"></i>
-        <span class="fill" style="background:${c};width:${w}%;${pos}"></span></span>
-        <span class="bv m num">${pct(v)}</span></div>`;
-    };
-    row.innerHTML=`<div class="top"><span class="xn">${name}</span>
-        <span class="bm">${bm? 'vs '+bm : 'vs Nifty + S&P blend'}</span>
-        <span class="chip ${d>=0?'up':'down'} delta m num">${d>=0?'+':''}${d.toFixed(1)} pp</span></div>
-      <div class="bars">${bar(s.xirr,color,'You')}${bar(s.benchXirr,'#57655E','Index')}</div>`;
+    const row=document.createElement('div'); row.className='dprow';
+    row.innerHTML=`<div class="dl"><b>${name}</b><span>${sub}</span></div>
+      <div class="dptrack">
+        <div class="axis"></div><div class="zero" style="left:${X(0)}"></div>
+        <span class="mk infl" style="left:${X(s.inflXirr)}" title="inflation"></span>
+        <span class="mk idx"  style="left:${X(s.benchXirr)}" title="index"></span>
+        <span class="mk you"  style="left:${X(s.xirr)};background:${color}"></span>
+      </div>
+      <div class="dv"><b class="m num" style="color:${s.xirr>=s.benchXirr?'var(--good)':'var(--bad)'}">${pct(s.xirr)}</b>
+        <span class="chip ${d>=0?'up':'down'} m num" style="white-space:nowrap">${d>=0?'+':''}${d.toFixed(1)} pp</span></div>`;
     wrap.appendChild(row);
   }
+  const gain=OV.value-OV.benchValue, rgain=OV.value-OV.inflValue;
+  $('xirrHead').innerHTML=`Same cashflows: indexes → <b class="m num">${cr(OV.benchValue)}</b> (you're
+    <b class="m num" style="color:${gain>=0?'var(--good)':'var(--bad)'}">${cr(Math.abs(gain))} ${gain>=0?'ahead':'behind'}</b>) ·
+    India CPI → <b class="m num">${cr(OV.inflValue)}</b> (real gain <b class="m num" style="color:var(--good)">${cr(rgain)}</b>).`;
+}
+
+/* ---------- holdings movement helpers ---------- */
+const PERIODS={'1D':1,'1W':7,'1M':30,'3M':91,'1Y':365};
+function movePct(h,days){
+  const ds=h.series.d, cs=h.series.c;
+  const end=new Date(ds[ds.length-1]+'T00:00'); const cut=new Date(end); cut.setDate(cut.getDate()-days);
+  const iso=cut.toISOString().slice(0,10);
+  let i=ds.findIndex(x=>x>=iso); if(i<0) i=0;
+  const p0=cs[i], p1=cs[cs.length-1];
+  return (p0&&p1)? (p1/p0-1)*100 : 0;
+}
+function sparkPeriod(h,days,color){
+  const ds=h.series.d, cs=h.series.c;
+  const end=new Date(ds[ds.length-1]+'T00:00'); const cut=new Date(end); cut.setDate(cut.getDate()-days);
+  const iso=cut.toISOString().slice(0,10);
+  let i=ds.findIndex(x=>x>=iso); if(i<0) i=0;
+  return sparkSvg(cs.slice(i).concat(), color, 56, 20);
 }
 
 /* ---------- alerts ---------- */
@@ -740,27 +901,69 @@ function renderAlerts(){
   $('nf2b').textContent=`Your ${money(m2.value,m2.currency)} position moved ${sign(m2.pct)}${impact(m2)}. Threshold ±4%.`;
 }
 
-/* ---------- holdings list ---------- */
+/* ---------- holdings ---------- */
+function holdingRow(h, days){
+  const mv=days!=null? movePct(h,days) : h.dayPct;
+  const r=document.createElement('div'); r.className='hrow';
+  const wpct=h.valueInr/PORTF_TOTAL*100;
+  r.innerHTML=`<div class="hl"><div class="hn"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${BC[h.bucket]};margin-right:6px;vertical-align:1px"></i>${h.name}</div>
+      <div class="hs" style="white-space:nowrap">${money(h.invested,h.currency)} in · ${wpct.toFixed(1)}%</div>
+      <div class="wbar" style="width:88px"><i style="width:${Math.min(100,wpct*4)}%"></i></div></div>
+    <div class="hspark">${days!=null? sparkPeriod(h,days, mv>=0?'#2E9B6E':'#C25B4E') : sparkSvg(h.series.c, mv>=0?'#2E9B6E':'#C25B4E',56,20)}</div>
+    <div class="hr"><div class="hv m num">${money(h.value,h.currency)}</div>
+      <div class="hd num"><span class="d ${mv>0.05?'up':mv<-0.05?'down':'flat'}">${mv>0?'+':''}${mv.toFixed(1)}%</span><span style="color:var(--muted)"> · XIRR ${h.xirr!=null?(h.xirr*100).toFixed(0)+'%':'—'}</span></div></div>`;
+  r.onclick=()=>openHolding(h.isin);
+  return r;
+}
+/* overview: just the top 5 by value — the full movement view is its own screen */
 function renderHoldings(){
   const wrap=$('holdings'); wrap.innerHTML='';
-  $('hcount').textContent=D.holdings.length+' positions';
-  for(const b of ['US','Gold','India','Crypto']){
-    const hs=D.holdings.filter(h=>h.bucket===b); if(!hs.length) continue;
-    const g=document.createElement('div'); g.className='grp';
-    g.innerHTML=`<i style="background:${BC[b]}"></i>${b}<span class="gv m">${money(D.stats[b].value,D.stats[b].currency)}</span>`;
-    wrap.appendChild(g);
-    for(const h of hs){
-      const r=document.createElement('div'); r.className='hrow';
-      const dc=h.dayPct;
-      r.innerHTML=`<div class="hl"><div class="hn">${h.name}</div>
-          <div class="hs">${h.qty%1?h.qty.toFixed(2):h.qty} ${h.type==='Gold'?'g':'units'} · ${h.sector}</div></div>
-        <div class="hspark">${sparkSvg(h.series.c, dc>=0? '#2E9B6E':'#C25B4E', 56, 20)}</div>
-        <div class="hr"><div class="hv m num">${money(h.value,h.currency)}</div>
-          <div class="hd num"><span class="d ${dc>0.05?'up':dc<-0.05?'down':'flat'}">${dc>0?'+':''}${dc.toFixed(1)}%</span><span style="color:var(--muted)"> · XIRR ${h.xirr!=null?(h.xirr*100).toFixed(0)+'%':'—'}</span></div></div>`;
-      r.onclick=()=>openHolding(h.isin);
-      wrap.appendChild(r);
-    }
+  $('hcount').textContent='top 5 of '+D.holdings.length+' by value';
+  D.holdings.slice(0,5).forEach(h=>wrap.appendChild(holdingRow(h,null)));
+}
+
+/* holdings screen: period-scoped movement, trending strips, sortable list */
+let hPeriod='1D', hSort='value';
+const SORTS={value:'Value', move:'Move %', invested:'Invested', xirr:'XIRR'};
+function renderHoldingsScreen(){
+  const days=PERIODS[hPeriod];
+  const pr=$('hperiods'); pr.innerHTML='';
+  for(const p of Object.keys(PERIODS)){
+    const b=document.createElement('button'); b.className='rchip'+(p===hPeriod?' on':''); b.textContent=p;
+    b.onclick=()=>{ hPeriod=p; renderHoldingsScreen(); }; pr.appendChild(b);
   }
+  const moved=D.holdings.map(h=>({h,mv:movePct(h,days)}));
+  // trending: biggest movers this period, up and down side by side
+  const up=[...moved].filter(x=>x.mv>0).sort((a,b)=>b.mv-a.mv).slice(0,4);
+  const dn=[...moved].filter(x=>x.mv<0).sort((a,b)=>a.mv-b.mv).slice(0,4);
+  $('trendPeriod').textContent=hPeriod;
+  const tr=$('trend'); tr.innerHTML='';
+  const col=(items,cls)=>{
+    const c=document.createElement('div');
+    for(const {h,mv} of items){
+      const r=document.createElement('div'); r.className='trow2';
+      r.innerHTML=`<span class="tn">${h.name}</span><span class="tv d ${cls}">${mv>0?'▲':'▼'} ${Math.abs(mv).toFixed(1)}%</span>`;
+      r.onclick=()=>openHolding(h.isin); c.appendChild(r);
+    }
+    if(!items.length){ const e=document.createElement('div'); e.className='trow2'; e.style.color='var(--muted)'; e.textContent='— none'; c.appendChild(e); }
+    return c;
+  };
+  tr.append(col(up,'up'), col(dn,'down'));
+  // sort chips + list
+  const sr=$('hsorts'); sr.innerHTML='';
+  for(const [k,lbl] of Object.entries(SORTS)){
+    const b=document.createElement('button'); b.className='schip'+(k===hSort?' on':''); b.textContent=lbl;
+    b.onclick=()=>{ hSort=k; renderHoldingsScreen(); }; sr.appendChild(b);
+  }
+  const sorted=[...moved].sort((a,b)=>{
+    if(hSort==='move') return b.mv-a.mv;
+    if(hSort==='invested') return b.h.investedInr-a.h.investedInr;
+    if(hSort==='xirr') return (b.h.xirr??-9)-(a.h.xirr??-9);
+    return b.h.valueInr-a.h.valueInr;
+  });
+  const list=$('hfull'); list.innerHTML='';
+  $('hcount2').textContent=D.holdings.length+' positions';
+  sorted.forEach(({h})=>list.appendChild(holdingRow(h,days)));
 }
 
 /* ---------- phone B : holding detail ---------- */
@@ -776,26 +979,39 @@ function renderDetail(h){
   const price=h.series.c[h.series.c.length-1];
   const csym=h.currency==='USD'?'$':'₹';
   const fnum=h.currency==='USD'?usd:inr;
+  const dIdx=(h.xirr!=null&&h.benchXirr!=null)? (h.xirr-h.benchXirr)*100:null;
+  const dInf=(h.xirr!=null&&h.inflXirr!=null)? (h.xirr-h.inflXirr)*100:null;
+  const rollTxt=r=>r==null?'—':(r>=0?'+':'')+(r*100).toFixed(1)+'%';
   wrap.innerHTML=`
     <div class="backrow"><span class="bk">‹</span><span class="t">${h.name}</span><span class="tick">${h.yahoo}</span></div>
     <div class="hero" style="margin-top:8px">
       <div class="vrow"><div class="v m num" style="font-size:28px">${money(h.value,h.currency)}</div></div>
-      <div style="margin-top:5px"><span class="chip ${h.dayPct>0?'up':h.dayPct<0?'down':'flat'} num">${h.dayPct>0?'+':''}${h.dayPct}% today</span></div>
-      <div class="sub m">${h.qty%1?h.qty.toFixed(3):h.qty} ${h.type==='Gold'?'grams':'units'} · ${csym}${fnum.format(Math.round(price))} ${h.type==='Gold'?'/ gram':'each'}</div>
+      <div style="margin-top:5px"><span class="chip ${h.dayPct>0?'up':h.dayPct<0?'down':'flat'} num">${h.dayPct>0?'+':''}${h.dayPct}% today</span>
+        <span class="chip flat m num" style="margin-left:6px">${h.qty%1?h.qty.toFixed(3):h.qty} ${h.type==='Gold'?'g':'u'} · ${csym}${fnum.format(Math.round(price))}</span></div>
+    </div>
+    <div class="card" style="border-top:none">
+      <div class="chips" id="dranges"></div>
+      <svg id="dchart" width="100%" height="176" viewBox="0 0 321 176" preserveAspectRatio="none"></svg>
+      <div class="legend"><span><i style="border-color:${BC[h.bucket]}"></i>Your position</span>
+        <span><i style="border-color:${MUT}"></i>Same money in ${st.benchmark}</span>
+        <span><i style="border-color:${MUT}; border-top-style:dotted"></i>Invested</span>
+        <span>● buys</span></div>
     </div>
     <div class="card">
-      <div class="chips" id="dranges"></div>
-      <svg id="dchart" width="100%" height="170" viewBox="0 0 321 170" preserveAspectRatio="none"></svg>
-      <div class="legend"><span><i style="border-color:${BC[h.bucket]}"></i>Price (${csym})</span>
-        <span>▲ your buys</span></div>
+      <div class="head"><span class="label">Rolling price return</span></div>
+      <div style="display:flex; gap:8px">
+        <span class="chip flat m num">3M ${rollTxt(h.roll3m)}</span>
+        <span class="chip flat m num">1Y ${rollTxt(h.roll1y)}</span>
+        <span class="chip flat m num">3Y ${rollTxt(h.roll3y)}${h.roll3y!=null?'/yr':''}</span>
+      </div>
     </div>
     <div class="statgrid">
       <div class="sg"><div class="k">Invested</div><div class="v m num">${money(h.invested,h.currency)}</div></div>
       <div class="sg"><div class="k">Value</div><div class="v m num">${money(h.value,h.currency)}</div></div>
-      <div class="sg"><div class="k">Return</div><div class="v m num" style="color:${h.value>=h.invested?'var(--good)':'var(--bad)'}">${pct(h.value/h.invested-1)}</div></div>
       <div class="sg"><div class="k">XIRR</div><div class="v m num">${h.xirr!=null?pct(h.xirr):'—'}</div></div>
-      <div class="sg"><div class="k">${st.benchmark} · ${csym}</div><div class="v m num" style="color:var(--muted)">${pct(st.benchXirr)}</div></div>
-      <div class="sg"><div class="k">Alert at</div><div class="v">±4% / day</div></div>
+      <div class="sg"><div class="k">vs ${st.benchmark}</div><div class="v m num" style="color:${dIdx>=0?'var(--good)':'var(--bad)'}">${dIdx!=null?(dIdx>=0?'+':'')+dIdx.toFixed(1)+' pp':'—'}</div></div>
+      <div class="sg"><div class="k">vs ${st.inflation}</div><div class="v m num" style="color:${dInf>=0?'var(--good)':'var(--bad)'}">${dInf!=null?(dInf>=0?'+':'')+dInf.toFixed(1)+' pp':'—'}</div></div>
+      <div class="sg"><div class="k">Alert at</div><div class="v">±6% / day</div></div>
     </div>
     <div class="card">
       <div class="head"><span class="label">Your trades</span><span class="rd" style="font-size:11px;color:var(--muted)">${h.trades.length}</span></div>
@@ -807,28 +1023,33 @@ function renderDetail(h){
     const b=document.createElement('button'); b.className='rchip'+(r===detRange?' on':''); b.textContent=r;
     b.onclick=()=>{ detRange=r; renderDetail(h); }; rc.appendChild(b);
   }
-  // chart
-  const svg=$('dchart'); const W=321,H=170,padT=8,padB=18,padR=44;
+  // chart: position VALUE vs the same cashflows in the benchmark, plus invested
+  const svg=$('dchart'); const W=321,H=176,padT=8,padB=18,padR=44;
   const days={'3M':91,'1Y':365,'All':1e5}[detRange];
   const endD=new Date(h.series.d[h.series.d.length-1]+'T00:00');
   const cut=new Date(endD); cut.setDate(cut.getDate()-days);
   const iso=cut.toISOString().slice(0,10);
   let i0=h.series.d.findIndex(d=>d>=iso); if(i0<0)i0=0;
-  const ds=h.series.d.slice(i0), cs=h.series.c.slice(i0);
-  let lo=Math.min(...cs.filter(Boolean)), hi=Math.max(...cs); const span=hi-lo||1; lo-=span*.07; hi+=span*.07;
-  const X=i=>2+(W-2-padR)*i/Math.max(1,cs.length-1), Y=v=>padT+(H-padT-padB)*(1-(v-lo)/(hi-lo));
+  const ds=h.series.d.slice(i0), vs=h.series.v.slice(i0),
+        bs=h.series.b.slice(i0), is=h.series.i.slice(i0);
+  const all=[...vs,...bs,...is].filter(v=>v>0);
+  let lo=Math.min(...all), hi=Math.max(...all); const span=hi-lo||1; lo-=span*.07; hi+=span*.07;
+  const X=i=>2+(W-2-padR)*i/Math.max(1,vs.length-1), Y=v=>padT+(H-padT-padB)*(1-(v-lo)/(hi-lo));
   for(let g=0;g<3;g++){ const gv=lo+(hi-lo)*(g+1)/4, y=Y(gv);
     svg.appendChild(el('line',{x1:2,x2:W-padR+4,y1:y,y2:y,stroke:'#1B2420'}));
-    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT}); t.textContent=fnum.format(Math.round(gv)); t.classList.add('m'); svg.appendChild(t); }
-  let d=''; cs.forEach((v,i)=>{ if(v) d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
-  svg.appendChild(el('path',{d,fill:'none',stroke:BC[h.bucket],'stroke-width':2.2,'stroke-linejoin':'round'}));
-  // trade markers
+    const t=el('text',{x:W-2,y:y+3,'text-anchor':'end','font-size':9,fill:MUT});
+    t.textContent=money(gv,h.currency).replace(/[₹$]/,''); t.classList.add('m'); svg.appendChild(t); }
+  const mk=(arr)=>{ let d=''; arr.forEach((v,i)=>{ if(v>0) d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; }); return d; };
+  svg.appendChild(el('path',{d:mk(is),fill:'none',stroke:MUT,'stroke-width':1.4,'stroke-dasharray':'2 4','stroke-linecap':'round'}));
+  svg.appendChild(el('path',{d:mk(bs),fill:'none',stroke:MUT,'stroke-width':1.8}));
+  svg.appendChild(el('path',{d:mk(vs),fill:'none',stroke:BC[h.bucket],'stroke-width':2.4,'stroke-linejoin':'round'}));
+  // trades as dots ON the position-value line: filled = buy, hollow = sell
   for(const t of h.trades){
     let i=ds.findIndex(x=>x>=t.date); if(i<0) continue;
-    const v=cs[i]; if(!v) continue;
+    const v=vs[i]; if(!v) continue;
     const buy=t.side==='buy';
-    svg.appendChild(el('path',{d:`M${X(i)} ${Y(v)+(buy?7:-7)} l4 ${buy?6:-6} h-8 Z`,
-      fill:buy?BC[h.bucket]:'none',stroke:buy?'#0A0F0D':'var(--amber)','stroke-width':1}));
+    svg.appendChild(el('circle',{cx:X(i),cy:Y(v),r:3.2,
+      fill:buy?BC[h.bucket]:'#0A0F0D',stroke:buy?'#0A0F0D':BC[h.bucket],'stroke-width':buy?1.5:1.8}));
   }
   // trades list (latest first)
   const tl=$('dtrades');
@@ -847,9 +1068,15 @@ function renderDetail(h){
 // ?flat unrolls the phone screens for full-length design review/screenshots
 if(location.search.includes('flat'))
   document.querySelectorAll('.screen').forEach(s=>s.style.height='auto');
-function renderAll(){ renderHero(); renderTiles(); renderRanges(); renderChart(); renderAlloc(); }
-renderAll(); renderXirr(); renderAlerts(); renderHoldings();
+function renderAll(){ renderHero(); renderTiles(); renderRanges(); renderChart(); }
+renderAll(); renderDots(); renderAllocBar(); renderAlloc(); renderAlerts();
+renderHoldings(); renderHoldingsScreen();
 renderDetail(D.holdings.find(h=>h.isin==='US64110L1061')||D.holdings[0]);
+const goPhone=sel=>document.querySelector(sel)?.closest('.phone')
+  ?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});
+$('openAlloc').onclick=()=>goPhone('#tm2');
+$('openAll').onclick=()=>goPhone('#tabH');
+$('openAlerts').onclick=()=>goPhone('#nf1t');
 </script>
 </body>
 </html>
