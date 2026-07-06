@@ -15,7 +15,8 @@ import java.util.TimeZone
  * Every user-facing time in the app is shown in IST (Asia/Kolkata) on a
  * 12-hour clock with a lowercase am/pm marker, regardless of the device's
  * timezone — the payments and portfolio are Indian, so one fixed zone keeps
- * every timestamp unambiguous. All formatters here are read on the UI thread.
+ * every timestamp unambiguous. The zone is implicit (not labelled) in the
+ * UI. All formatters here are read on the UI thread.
  */
 object TimeFmt {
     val IST: ZoneId = ZoneId.of("Asia/Kolkata")
@@ -34,11 +35,11 @@ object TimeFmt {
     private val dateTimeSdf = sdf("d MMM yyyy, h:mm a")
     private val daySdf = sdf("d MMM yyyy")
 
-    /** epoch millis → "9:41 am IST" (transaction feed). */
-    fun time(ts: Long): String = timeSdf.format(Date(ts)) + " IST"
+    /** epoch millis → "9:41 am" (transaction feed). */
+    fun time(ts: Long): String = timeSdf.format(Date(ts))
 
-    /** epoch millis → "6 Jul 2026, 9:41 am IST" (receipt / records). */
-    fun dateTime(ts: Long): String = dateTimeSdf.format(Date(ts)) + " IST"
+    /** epoch millis → "6 Jul 2026, 9:41 am" (receipt / records). */
+    fun dateTime(ts: Long): String = dateTimeSdf.format(Date(ts))
 
     /** epoch millis → "Today" / "Yesterday" / "6 Jul 2026", with the day
      *  boundary evaluated in IST so it matches the times shown. */

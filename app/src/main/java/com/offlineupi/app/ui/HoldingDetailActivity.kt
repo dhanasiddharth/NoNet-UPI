@@ -279,7 +279,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.1f%%".format(it) }
             binding.chart.scrubFormatter = { idx, s, v ->
-                "${t(s)} IST · ${MoneyFmt.price(px[idx], ccy)} · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
+                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
             }
             binding.chart.set(listOf(LineChartView.Series(pct, color, area = true)), secs)
             binding.tvChartLegend.text = "— price · 15m bars · last 48h"
@@ -291,7 +291,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             binding.chart.allowNegative = false
             binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
             binding.chart.scrubFormatter = { idx, s, v ->
-                "${t(s)} IST · ${MoneyFmt.price(px[idx], ccy)} · ${MoneyFmt.money(v, ccy)}"
+                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${MoneyFmt.money(v, ccy)}"
             }
             binding.chart.set(listOf(LineChartView.Series(vals, color, area = true)), secs)
             binding.tvChartLegend.text = "— value · 15m bars · last 48h"
