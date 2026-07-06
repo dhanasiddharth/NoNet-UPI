@@ -95,6 +95,27 @@ class PortfolioSync(private val context: Context, private val db: PortfolioDb) {
         return bars
     }
 
+    /**
+     * Intraday bars (15-minute closes over the last ~48h) for the 1D view.
+     * View-time data only — never persisted; daily closes remain the record.
+     */
+    fun fetchIntraday(symbol: String): List<Pair<Long, Double>> {
+        val enc = URLEncoder.encode(symbol, "UTF-8")
+        val body = httpGet(
+            "https://query1.finance.yahoo.com/v8/finance/chart/$enc?range=2d&interval=15m"
+        )
+        val result = org.json.JSONObject(body)
+            .getJSONObject("chart").getJSONArray("result").getJSONObject(0)
+        val ts = result.optJSONArray("timestamp") ?: return emptyList()
+        val closes = result.getJSONObject("indicators")
+            .getJSONArray("quote").getJSONObject(0).optJSONArray("close") ?: return emptyList()
+        return buildList {
+            for (i in 0 until ts.length()) {
+                if (!closes.isNull(i)) add(ts.getLong(i) to closes.getDouble(i))
+            }
+        }
+    }
+
     private fun fetchChart(symbol: String, range: String): Int {
         val enc = URLEncoder.encode(symbol, "UTF-8")
         val body = httpGet(

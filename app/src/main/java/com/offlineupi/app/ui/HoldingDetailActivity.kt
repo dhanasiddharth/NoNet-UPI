@@ -40,10 +40,12 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private var detail: HoldingDetail? = null
     private var range = "1Y"
-    private val ranges = listOf("1D", "1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
+    private val ranges = listOf("1D", "1W", "1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
     private val chartModes = listOf("Performance", "Value")
     private var chartMode = "Performance"
     private var tradesExpanded = false
+    /** 15-minute bars (epochSec → native price) for the 1D view; null = daily fallback. */
+    private var intraday: List<Pair<Long, Double>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +64,24 @@ class HoldingDetailActivity : AppCompatActivity() {
             if (d == null) { finish(); return@launch }
             detail = d
             render(d)
+            // daily bars can't draw a real 1D — pull ~48h of 15m bars in the
+            // background and re-render if the user is (or lands) on 1D
+            val bars = withContext(Dispatchers.IO) {
+                runCatching { fetchIntradayNative(d) }.getOrNull()
+            }
+            if (bars != null && bars.size >= 2) {
+                intraday = bars
+                if (range == "1D") renderChart(d)
+            }
         }
+    }
+
+    private fun fetchIntradayNative(d: HoldingDetail): List<Pair<Long, Double>> {
+        val raw = com.offlineupi.app.portfolio.PortfolioSync(this, db)
+            .fetchIntraday(d.instrument.yahoo)
+        if (d.instrument.isin != "GOLD") return raw
+        val fx = db.priceSeries("USDINR=X").lastOrNull()?.second ?: return emptyList()
+        return raw.map { it.first to it.second * fx / PortfolioAnalytics.OZ_TO_GRAM }
     }
 
     private val color get() = PortfolioUi.bucketColors.getValue(detail!!.bucket)
@@ -111,7 +130,7 @@ class HoldingDetailActivity : AppCompatActivity() {
 
     private fun startIndex(d: HoldingDetail): Int {
         val back = when (range) {
-            "1D" -> 1L; "1M" -> 30L; "3M" -> 91L; "6M" -> 182L
+            "1D" -> 1L; "1W" -> 7L; "1M" -> 30L; "3M" -> 91L; "6M" -> 182L
             "1Y" -> 365L; "3Y" -> 1095L; "5Y" -> 1826L
             else -> return 0
         }
@@ -178,6 +197,13 @@ class HoldingDetailActivity : AppCompatActivity() {
     /** One chart, two lenses: performance strips contributions; value shows them. */
     @SuppressLint("SetTextI18n")
     private fun renderChart(d: HoldingDetail) {
+        val bars = intraday
+        if (range == "1D" && bars != null && bars.size >= 2) {
+            renderIntraday(d, bars)
+            return
+        }
+        binding.chart.xLabelFormatter = null
+
         val i0 = startIndex(d)
         val n = d.days.size
         val win = n - i0
@@ -232,6 +258,49 @@ class HoldingDetailActivity : AppCompatActivity() {
         // stats follow the chart's actual viewport (kept across lens switches)
         val (vs, ve) = binding.chart.viewport()
         updateWindowStats(d, vs, ve)
+    }
+
+    /** 1D from live 15-minute bars (~48h). No benchmark line: index bars keep
+     *  different market hours, so intraday shows the security alone. */
+    @SuppressLint("SetTextI18n")
+    private fun renderIntraday(d: HoldingDetail, bars: List<Pair<Long, Double>>) {
+        val secs = LongArray(bars.size) { bars[it].first }
+        val px = DoubleArray(bars.size) { bars[it].second }
+        val zone = java.time.ZoneId.systemDefault()
+        val timeFmt = DateTimeFormatter.ofPattern("EEE HH:mm").withZone(zone)
+        fun t(s: Long): String = timeFmt.format(java.time.Instant.ofEpochSecond(s))
+        binding.chart.xLabelFormatter = { s -> t(s) }
+
+        val first = px.firstOrNull { it > 0 } ?: return
+        val last = px.lastOrNull { it > 0 } ?: return
+        val movePct = (last / first - 1) * 100
+
+        if (chartMode == "Performance") {
+            val pct = DoubleArray(px.size) { if (px[it] > 0) (px[it] / first - 1) * 100 else Double.NaN }
+            binding.chart.allowNegative = true
+            binding.chart.yFormatter = { "%.1f%%".format(it) }
+            binding.chart.scrubFormatter = { idx, s, v ->
+                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
+            }
+            binding.chart.set(listOf(LineChartView.Series(pct, color, area = true)), secs)
+            binding.tvChartLegend.text = "— price · 15m bars · last 48h"
+            binding.tvChartStat.text = MoneyFmt.signedPct(movePct)
+            binding.tvChartStat.setTextColor(getColor(
+                if (movePct >= 0) R.color.accent_green else R.color.accent_red))
+        } else {
+            val vals = DoubleArray(px.size) { if (px[it] > 0) d.qty * px[it] else Double.NaN }
+            binding.chart.allowNegative = false
+            binding.chart.yFormatter = { MoneyFmt.axis(it, ccy) }
+            binding.chart.scrubFormatter = { idx, s, v ->
+                "${t(s)} · ${MoneyFmt.price(px[idx], ccy)} · ${MoneyFmt.money(v, ccy)}"
+            }
+            binding.chart.set(listOf(LineChartView.Series(vals, color, area = true)), secs)
+            binding.tvChartLegend.text = "— value · 15m bars · last 48h"
+            binding.tvChartStat.text = MoneyFmt.money(d.qty * last, ccy)
+            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
+        }
+        chip(binding.tvDayChip, if (abs(movePct) < 0.05) null else movePct > 0,
+            "${MoneyFmt.signedPct(movePct)} · 48h")
     }
 
     /** Rolling price-return chips (3M / 1Y / 3Y annualised) — mockup layout. */

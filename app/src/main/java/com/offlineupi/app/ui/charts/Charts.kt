@@ -70,6 +70,9 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     var scrubFormatter: ((idx: Int, day: Long, value: Double) -> String)? = null
     /** Fires as the user pans; screens update their stats to the visible window. */
     var onViewportChange: ((startIdx: Int, endIdx: Int) -> Unit)? = null
+    /** Overrides x-axis labels; the raw longs in [set]'s dates are passed through
+     *  (epoch days by default, epoch seconds for intraday). */
+    var xLabelFormatter: ((Long) -> String)? = null
 
     private var series: List<Series> = emptyList()
     private var dates: LongArray = LongArray(0)
@@ -225,7 +228,8 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
         // x labels from dates
         if (dates.size >= n) {
             val fmt = DateTimeFormatter.ofPattern(if (winSize > 400) "MMM yy" else "d MMM")
-            fun lbl(k: Int) = LocalDate.ofEpochDay(dates[k]).format(fmt)
+            fun lbl(k: Int) = xLabelFormatter?.invoke(dates[k])
+                ?: LocalDate.ofEpochDay(dates[k]).format(fmt)
             textPaint.textAlign = Paint.Align.LEFT
             canvas.drawText(lbl(winStart), 0f, height - dp(3f), textPaint)
             textPaint.textAlign = Paint.Align.CENTER
