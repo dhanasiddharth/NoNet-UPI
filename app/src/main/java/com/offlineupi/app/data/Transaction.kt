@@ -21,7 +21,13 @@ data class Transaction(
     val status: String, // "success", "failure", "reversed", or "pending"
     val rawSmsText: String?,
     /** Reference number of the refund when the payment was reversed. */
-    val reversalRrn: String? = null
+    val reversalRrn: String? = null,
+    // Where the payment was made — captured on the processing screen.
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationAccuracy: Float? = null,     // metres, if the fix reported it
+    val placeName: String? = null,           // user-confirmed place / business
+    val placeId: String? = null              // Google place_id of the selection
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -37,6 +43,11 @@ data class Transaction(
         put("status", status)
         put("rawSmsText", rawSmsText ?: JSONObject.NULL)
         put("reversalRrn", reversalRrn ?: JSONObject.NULL)
+        put("latitude", latitude ?: JSONObject.NULL)
+        put("longitude", longitude ?: JSONObject.NULL)
+        put("locationAccuracy", locationAccuracy?.toDouble() ?: JSONObject.NULL)
+        put("placeName", placeName ?: JSONObject.NULL)
+        put("placeId", placeId ?: JSONObject.NULL)
     }
 
     companion object {
@@ -53,10 +64,18 @@ data class Transaction(
             timestamp = json.getLong("timestamp"),
             status = json.getString("status"),
             rawSmsText = json.nullString("rawSmsText"),
-            reversalRrn = json.nullString("reversalRrn")
+            reversalRrn = json.nullString("reversalRrn"),
+            latitude = json.nullDouble("latitude"),
+            longitude = json.nullDouble("longitude"),
+            locationAccuracy = json.nullDouble("locationAccuracy")?.toFloat(),
+            placeName = json.nullString("placeName"),
+            placeId = json.nullString("placeId")
         )
 
         private fun JSONObject.nullString(key: String): String? =
             if (has(key) && !isNull(key)) getString(key) else null
+
+        private fun JSONObject.nullDouble(key: String): Double? =
+            if (has(key) && !isNull(key)) getDouble(key) else null
     }
 }

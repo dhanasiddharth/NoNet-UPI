@@ -192,6 +192,19 @@ class TransactionReceiptActivity : AppCompatActivity() {
         // Date & Time — IST, am/pm (see util/TimeFmt)
         binding.tvDateTime.text = TimeFmt.dateTime(txn.timestamp)
 
+        // Location tag captured at pay time
+        val placeText = txn.placeName
+            ?: txn.latitude?.let { lat -> txn.longitude?.let { lng -> "%.5f, %.5f".format(lat, lng) } }
+        if (placeText != null) {
+            binding.layoutLocation.visibility = View.VISIBLE
+            binding.tvLocation.text = placeText
+            val acc = txn.locationAccuracy
+            binding.tvLocationAccuracy.visibility = if (acc != null) View.VISIBLE else View.GONE
+            if (acc != null) binding.tvLocationAccuracy.text = "±${acc.toInt()} m accuracy"
+        } else {
+            binding.layoutLocation.visibility = View.GONE
+        }
+
         // Remarks
         if (!txn.remarks.isNullOrBlank()) {
             binding.tvRemarks.text = txn.remarks

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- width=match_parent so the grid distributes cells evenly across the row -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="56dp"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center_horizontal"
@@ -9,11 +10,11 @@
 
     <TextView
         android:id="@+id/tvRecentAvatar"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
         android:gravity="center"
         android:textColor="@color/accent_emerald_light"
-        android:textSize="16sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:background="@drawable/bg_avatar_emerald" />
 
@@ -23,8 +24,8 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:textColor="@color/text_secondary"
-        android:textSize="10.5sp"
+        android:textSize="11sp"
         android:maxLines="1"
         android:ellipsize="end"
-        android:layout_marginTop="5dp" />
+        android:layout_marginTop="6dp" />
 </LinearLayout>

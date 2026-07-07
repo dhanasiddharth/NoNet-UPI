@@ -48,9 +48,10 @@ class PortfolioFragment : Fragment() {
     private val sync by lazy { PortfolioSync(requireContext(), db) }
 
     private var snapshot: Snapshot? = null
-    private var range = "1Y"
-    /** Focused buckets — empty or all = whole portfolio; any subset combines. */
-    private val selection = linkedSetOf<Bucket>()
+    private var range = "1M"
+    /** Focused buckets — empty or all = whole portfolio; any subset combines.
+     *  Defaults to the liquid markets (Gold is the odd one out). */
+    private val selection = linkedSetOf(Bucket.India, Bucket.US, Bucket.Crypto)
     private var compare = false
     private var masked = false
     private var chartMode = "Value"
@@ -396,20 +397,33 @@ class PortfolioFragment : Fragment() {
         val sc = src(s)
         val v = sc.values.last()
         binding.tvHeroValue.text = mask(money(v, sc.ccy))
-        // the change chip follows the selected range, so 1M/3M/… re-frame the
-        // whole page, not only the chart
+        // Split the range's change into two parts the user asked to see apart:
+        //  · growth — what the holdings gained/lost on the market
+        //  · added/removed — money you put in or took out over the window
+        // (total value change = growth + added). The chip is market growth so
+        // it isn't inflated by fresh deposits.
         val i0 = startIndex(s)
         val v0 = (i0 until sc.values.size).firstOrNull { sc.values[it] > 0 }
             ?.let { sc.values[it] } ?: v
-        val delta = v - v0
-        val deltaPct = if (v0 > 0) delta / v0 * 100 else 0.0
-        chip(binding.tvDayChip, if (abs(deltaPct) < 0.05) null else delta > 0,
-            mask("${if (delta >= 0) "+" else "−"}${money(abs(delta), sc.ccy)} · ${"%.1f".format(abs(deltaPct))}% · $range"))
+        val added = sc.invested.last() - sc.invested[i0]
+        val growth = (v - v0) - added
+        val growthBase = v0 + added.coerceAtLeast(0.0)
+        val growthPct = if (growthBase > 0) growth / growthBase * 100 else 0.0
+        chip(binding.tvDayChip, if (abs(growthPct) < 0.05) null else growth > 0,
+            mask("${if (growth >= 0) "▲" else "▼"} ${money(abs(growth), sc.ccy)} · ${"%.1f".format(abs(growthPct))}% · $range"))
         binding.tvXirrChip.text = "XIRR " + pct(sc.xirr)
-        val invested = sc.invested.last()
+
         val asOf = LocalDate.ofEpochDay(s.asOfDay).format(DateTimeFormatter.ofPattern("d MMM"))
-        binding.tvHeroSub.text =
-            "${sc.label} · " + mask("invested ${money(invested, sc.ccy)}") + " · as of $asOf"
+        val flow = when {
+            added > 1.0 -> "added ${mask(money(added, sc.ccy))}"
+            added < -1.0 -> "withdrew ${mask(money(-added, sc.ccy))}"
+            else -> null
+        }
+        binding.tvHeroSub.text = buildString {
+            append(sc.label)
+            if (flow != null) append(" · $flow")
+            append(" · as of $asOf")
+        }
     }
 
     private fun renderTiles(s: Snapshot) {
@@ -460,7 +474,7 @@ class PortfolioFragment : Fragment() {
         return DoubleArray(64) { i -> this[from + (i * stride).toInt().coerceAtMost(n - 1)] }
     }
 
-    private val ranges = listOf("1M", "3M", "6M", "YTD", "1Y", "All")
+    private val ranges = listOf("1W", "1M", "3M", "6M", "YTD", "1Y", "All")
 
     private fun renderRanges() {
         val wrap = binding.layoutRanges
@@ -495,7 +509,7 @@ class PortfolioFragment : Fragment() {
         val fromDay = when (range) {
             "All" -> return 0
             "YTD" -> LocalDate.ofEpochDay(endDay).withDayOfYear(1).toEpochDay()
-            else -> endDay - mapOf("1M" to 30L, "3M" to 91L, "6M" to 182L, "1Y" to 365L).getValue(range)
+            else -> endDay - mapOf("1W" to 7L, "1M" to 30L, "3M" to 91L, "6M" to 182L, "1Y" to 365L).getValue(range)
         }
         var i = s.days.indexOfFirst { it >= fromDay }
         if (i < 0) i = 0
@@ -511,6 +525,18 @@ class PortfolioFragment : Fragment() {
         val n = sc.values.size
         val win = n - i0
         val dateFmt = DateTimeFormatter.ofPattern("d MMM yy")
+
+        // trade points = days the net contribution changed; label the amount
+        // (hidden when masked). The chart only draws labels when few are in view.
+        val tradeDots = buildList {
+            for (k in 1 until n) {
+                val flow = sc.invested[k] - sc.invested[k - 1]
+                if (abs(flow) > 1.0) add(LineChartView.Dot(
+                    k, if (masked) null else (if (flow >= 0) "+" else "−") + money(abs(flow), sc.ccy),
+                    up = flow >= 0
+                ))
+            }
+        }
 
         if (chartMode == "Perf") {
             // time-weighted return over full history: each day's growth is
@@ -549,8 +575,8 @@ class PortfolioFragment : Fragment() {
             binding.chart.set(listOf(
                 LineChartView.Series(you, sc.color, area = true),
                 LineChartView.Series(bench, mutedLine, widthDp = 1.8f),
-            ), s.days, emptyList(), win, rebase = true)
-            binding.tvLegend.text = "— return %, contributions stripped   — ${sc.benchName}"
+            ), s.days, tradeDots, win, rebase = true)
+            binding.tvLegend.text = "— return %   — ${sc.benchName}   ● trades"
             val yNow = windowRel(you) ?: 0.0
             val gap = yNow - (windowRel(bench) ?: 0.0)
             binding.tvRangeValue.text = "${if (yNow >= 0) "+" else ""}${"%.1f".format(yNow)}%"
@@ -572,8 +598,8 @@ class PortfolioFragment : Fragment() {
         binding.chart.scrubFormatter = { _, day, v ->
             LocalDate.ofEpochDay(day).format(dateFmt) + " · " + mask(money(v, sc.ccy))
         }
-        binding.chart.set(lines, s.days, emptyList(), win, rebase = false)
-        binding.tvLegend.text = legend
+        binding.chart.set(lines, s.days, tradeDots, win, rebase = false)
+        binding.tvLegend.text = "$legend   ● trades"
 
         val v = sc.values.last()
         val v0 = (i0 until n).firstOrNull { sc.values[it] > 0 }?.let { sc.values[it] } ?: 1.0

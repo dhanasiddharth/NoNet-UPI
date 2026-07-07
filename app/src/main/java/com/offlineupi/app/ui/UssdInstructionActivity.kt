@@ -3,20 +3,28 @@ package com.offlineupi.app.ui
 import com.offlineupi.app.util.applySystemBarInsets
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
 import android.telephony.SmsMessage
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.offlineupi.app.util.GeocodeClient
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -75,6 +83,16 @@ class UssdInstructionActivity : AppCompatActivity() {
     // Bank SMS that arrived before the transaction record existed; replayed on save.
     private val pendingSmsBodies = mutableListOf<String>()
 
+    // ---- payment location tag (captured in the background on this screen) ----
+    private val locationHandler = Handler(Looper.getMainLooper())
+    private var locationListener: LocationListener? = null
+    private var capturedLat: Double? = null
+    private var capturedLng: Double? = null
+    private var capturedAccuracy: Float? = null
+    private var selectedPlaceName: String? = null
+    private var selectedPlaceId: String? = null
+    private var placeGeocoded = false
+
     // Post-payment verification via *99*6*1# (NUUP 6.1 recent transactions).
     // This check is the ONLY source that may declare success/failure on screen
     // (besides a matched bank SMS); the USSD result dialog is provisional.
@@ -88,6 +106,13 @@ class UssdInstructionActivity : AppCompatActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
                 == PackageManager.PERMISSION_GRANTED
             ) registerSmsReceiver()
+        }
+
+    private val locationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+            ) captureLocation()
         }
 
     private val stepReceiver = object : BroadcastReceiver() {
@@ -157,6 +182,7 @@ class UssdInstructionActivity : AppCompatActivity() {
         updateTitleWithName()
         setupSteps()
         requestSmsPermission()
+        maybeCaptureLocation()
 
         // Register for the whole activity lifetime: the USSD dialog belongs to
         // the phone app, so this activity is PAUSED during the entire session —
@@ -205,12 +231,182 @@ class UssdInstructionActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         verifyHandler.removeCallbacksAndMessages(null)
+        locationHandler.removeCallbacksAndMessages(null)
+        locationListener?.let { l ->
+            runCatching { (getSystemService(Context.LOCATION_SERVICE) as LocationManager).removeUpdates(l) }
+        }
         try { unregisterReceiver(stepReceiver) } catch (_: Exception) {}
         if (smsReceiverRegistered) {
             try { unregisterReceiver(smsReceiver) } catch (_: Exception) {}
             smsReceiverRegistered = false
         }
     }
+
+    // ---------- payment location tag ----------
+
+    private fun maybeCaptureLocation() {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) captureLocation()
+        else locationPermissionLauncher.launch(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        )
+    }
+
+    /**
+     * One-shot location: seed instantly from last-known so the picker appears
+     * fast, then upgrade with a fresh fix for the stored coordinates. Runs in
+     * the background; nothing here blocks the payment flow.
+     */
+    @SuppressLint("MissingPermission")
+    private fun captureLocation() {
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter { runCatching { lm.isProviderEnabled(it) }.getOrDefault(false) }
+        if (providers.isEmpty()) return   // location off — skip silently
+
+        showLocationCard(getString(R.string.location_finding))
+
+        val seed = providers.mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+        if (seed != null && System.currentTimeMillis() - seed.time < 5 * 60_000L) {
+            onLocationFixed(seed, geocode = true)
+        }
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                runCatching { lm.removeUpdates(this) }
+                locationHandler.removeCallbacksAndMessages(null)
+                locationListener = null
+                onLocationFixed(location, geocode = !placeGeocoded)
+            }
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+            @Deprecated("legacy") override fun onStatusChanged(p: String?, s: Int, e: Bundle?) {}
+        }
+        locationListener = listener
+        providers.forEach { runCatching { lm.requestLocationUpdates(it, 0L, 0f, listener, mainLooper) } }
+
+        // stop waiting after 15s; fall back to the seed if a fresh fix never came
+        locationHandler.postDelayed({
+            runCatching { lm.removeUpdates(listener) }
+            locationListener = null
+            if (!placeGeocoded) {
+                if (seed != null) onLocationFixed(seed, geocode = true)
+                else showLocationCard(getString(R.string.location_unavailable))
+            }
+        }, 15_000)
+    }
+
+    private fun onLocationFixed(loc: Location, geocode: Boolean) {
+        capturedLat = loc.latitude
+        capturedLng = loc.longitude
+        capturedAccuracy = if (loc.hasAccuracy()) loc.accuracy else null
+        persistLocationIfRecordExists()   // coords stored even before a place is picked
+        if (geocode && !placeGeocoded) {
+            placeGeocoded = true
+            fetchPlaces(loc.latitude, loc.longitude)
+        }
+    }
+
+    private fun fetchPlaces(lat: Double, lng: Double) {
+        showLocationCard(getString(R.string.location_checking))
+        Thread {
+            val places = runCatching { GeocodeClient.reverseGeocode(lat, lng) }.getOrDefault(emptyList())
+            runOnUiThread {
+                if (isFinishing || isDestroyed || selectedPlaceName != null) return@runOnUiThread
+                renderLocationPicker(places)
+            }
+        }.start()
+    }
+
+    private fun showLocationCard(status: String) {
+        binding.layoutLocation.visibility = View.VISIBLE
+        binding.tvLocationStatus.text = status
+        binding.tvLocationStatus.visibility = View.VISIBLE
+    }
+
+    /** Inline candidate list — no dialog, so the payment flow is never interrupted. */
+    private fun renderLocationPicker(places: List<GeocodeClient.Place>) {
+        val list = binding.layoutPlaceList
+        list.removeAllViews()
+        if (places.isEmpty()) {
+            binding.tvLocationHeader.text = getString(R.string.location_header_saved)
+            binding.tvLocationStatus.text = getString(R.string.location_no_places)
+            return
+        }
+        binding.tvLocationHeader.text = getString(R.string.location_header_pick)
+        binding.tvLocationStatus.text = getString(R.string.location_pick_hint)
+        places.forEach { place -> list.addView(placeRow(place.label, place.area, place.isBusiness) {
+            selectPlace(place)
+        }) }
+        // let the user tag coordinates only, without naming a place
+        list.addView(placeRow(getString(R.string.location_skip_label), "", false) {
+            selectPlace(null)
+        })
+    }
+
+    private fun placeRow(primary: String, secondary: String, business: Boolean, onTap: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+            setBackgroundResource(R.drawable.bg_input_pill)
+            setOnClickListener { onTap() }
+        }
+        val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        text.addView(TextView(this).apply {
+            this.text = if (business) "📍  $primary" else primary
+            setTextColor(getColor(R.color.text_primary))
+            textSize = 14.5f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            maxLines = 2
+        })
+        if (secondary.isNotBlank()) text.addView(TextView(this).apply {
+            this.text = secondary
+            setTextColor(getColor(R.color.text_secondary))
+            textSize = 12f
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(1) }
+        })
+        row.addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(8) }
+        return row
+    }
+
+    private fun selectPlace(place: GeocodeClient.Place?) {
+        selectedPlaceName = place?.let {
+            if (it.area.isNotBlank()) "${it.label}, ${it.area}" else it.label
+        }
+        selectedPlaceId = place?.placeId
+        persistLocationIfRecordExists()
+        // collapse to the confirmed line — quiet, no dialog
+        binding.layoutPlaceList.removeAllViews()
+        binding.tvLocationHeader.text = getString(R.string.location_header_tagged)
+        binding.tvLocationStatus.text = selectedPlaceName?.let { "📍  $it" }
+            ?: getString(R.string.location_coords_only)
+    }
+
+    private fun applyLocation(txn: Transaction): Transaction = txn.copy(
+        latitude = capturedLat,
+        longitude = capturedLng,
+        locationAccuracy = capturedAccuracy,
+        placeName = selectedPlaceName,
+        placeId = selectedPlaceId,
+    )
+
+    private fun persistLocationIfRecordExists() {
+        val id = currentTransactionId ?: return
+        if (capturedLat == null) return
+        transactionStore.updateTransaction(id) { applyLocation(it) }
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private fun requestSmsPermission() {
         val needed = listOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
@@ -640,7 +836,7 @@ class UssdInstructionActivity : AppCompatActivity() {
     }
 
     private fun saveTransaction(status: String, rawUssdText: String?) {
-        val txn = Transaction(
+        val txn = applyLocation(Transaction(
             type = "payment",
             amount = amount,
             payeeAddress = payeeAddress,
@@ -651,7 +847,7 @@ class UssdInstructionActivity : AppCompatActivity() {
             remarks = remarks,
             status = status,
             rawSmsText = null
-        )
+        ))
         transactionStore.saveTransaction(txn)
         currentTransactionId = txn.id
 

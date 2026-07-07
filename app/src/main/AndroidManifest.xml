@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Portfolio prices (Yahoo) + sheet listing sync — the app's only network use -->
+    <!-- Portfolio prices (Yahoo) + sheet listing sync + payment reverse-geocode -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Tag each payment with where it was made (reverse-geocoded on the
+         processing screen). Coarse is enough; fine sharpens the place match. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />

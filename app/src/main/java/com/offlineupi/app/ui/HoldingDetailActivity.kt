@@ -209,7 +209,11 @@ class HoldingDetailActivity : AppCompatActivity() {
         val n = d.days.size
         val win = n - i0
         val dateFmt = DateTimeFormatter.ofPattern("d MMM yy")
-        val dots = d.tradeDots.map { it.idx }
+        val dots = d.tradeDots.map { td ->
+            val buy = td.trade.side == "buy"
+            val cash = td.trade.qty * td.trade.price + td.trade.fee
+            LineChartView.Dot(td.idx, (if (buy) "+" else "−") + MoneyFmt.money(cash, ccy), up = buy)
+        }
 
         if (chartMode == "Performance") {
             // cumulative price % over full history; the chart re-anchors 0% to

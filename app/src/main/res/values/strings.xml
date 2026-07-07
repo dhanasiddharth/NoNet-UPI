@@ -60,6 +60,18 @@
     <string name="ussd_subtitle_failure">Payment was not successful. Please try again.</string>
     <string name="ussd_clipboard_copied_badge">UPI ID copied to clipboard</string>
     <string name="ussd_security_note">This app does not replace official UPI apps. All data is stored encrypted on-device only.</string>
+
+    <!-- Payment location tag (inline on the processing screen) -->
+    <string name="location_finding">Finding where you are…</string>
+    <string name="location_checking">Checking nearby places…</string>
+    <string name="location_unavailable">Location unavailable — turn on location to tag this payment.</string>
+    <string name="location_header_pick">WHERE ARE YOU PAYING?</string>
+    <string name="location_header_saved">LOCATION</string>
+    <string name="location_header_tagged">LOCATION TAGGED</string>
+    <string name="location_pick_hint">Tap the place you\'re paying at.</string>
+    <string name="location_no_places">No nearby places found — coordinates saved.</string>
+    <string name="location_skip_label">Somewhere else (save location only)</string>
+    <string name="location_coords_only">📍 Coordinates saved</string>
     <string name="btn_done">Done</string>
     <string name="btn_retry_transaction">Retry payment</string>
     <string name="btn_done_verify_background">Done — verify in background</string>

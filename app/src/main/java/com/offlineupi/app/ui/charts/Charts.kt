@@ -63,6 +63,10 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
                       val widthDp: Float = 2.2f, val dashed: Boolean = false,
                       val area: Boolean = false)
 
+    /** A marker on series[0] — e.g. a trade. [label] (a short value) is drawn
+     *  only when few markers are in view, so a dense window stays readable. */
+    data class Dot(val idx: Int, val label: String? = null, val up: Boolean = true)
+
     var yFormatter: (Double) -> String = { "%.0f".format(it) }
     /** false (default): values ≤ 0 are "no data" gaps. true: only NaN is a gap. */
     var allowNegative = false
@@ -76,7 +80,7 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
 
     private var series: List<Series> = emptyList()
     private var dates: LongArray = LongArray(0)
-    private var dotIdx: List<Int> = emptyList()
+    private var dots: List<Dot> = emptyList()
     private var rebase = false
     private var n = 0
     private var winSize = 0
@@ -93,6 +97,9 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     private val labelText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.text_primary)
         textSize = dp(11f); isFakeBoldText = true
+    }
+    private val markerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = dp(9.5f); isFakeBoldText = true
     }
     private val labelBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF5192420.toInt() }
     private val labelStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -114,14 +121,14 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
      * a new range or new data resets to the most recent window.
      */
     fun set(series: List<Series>, dates: LongArray = LongArray(0),
-            dots: List<Int> = emptyList(), windowSize: Int = 0, rebase: Boolean = false) {
+            dots: List<Dot> = emptyList(), windowSize: Int = 0, rebase: Boolean = false) {
         val newN = series.firstOrNull()?.values?.size ?: 0
         val newWin = if (windowSize <= 1 || windowSize > newN) newN else windowSize
         val keepViewport = newN == n && newWin == winSize && winEnd in newWin..newN
         this.series = series.map { s -> s.copy(values = s.values.copyOf()) }
         n = newN
         this.dates = dates
-        dotIdx = dots
+        this.dots = dots
         this.rebase = rebase
         winSize = newWin
         if (!keepViewport) {
@@ -214,15 +221,22 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             }
         }
 
-        // trade markers ride series[0]
-        for (i in dotIdx) {
-            if (i < winStart || i >= winEnd) continue
-            val v = disp(0, i, bases[0])
-            if (v.isNaN()) continue
+        // trade markers ride series[0]; label them only when few are in view
+        val inWindow = dots.filter { it.idx in winStart until winEnd && !disp(0, it.idx, bases[0]).isNaN() }
+        val showLabels = inWindow.count { it.label != null } in 1..8
+        for (d in inWindow) {
+            val v = disp(0, d.idx, bases[0])
+            val cx = x(d.idx); val cy = y(v)
             dotPaint.color = 0xFF0A0F0D.toInt()
-            canvas.drawCircle(x(i), y(v), dp(4.2f), dotPaint)
-            dotPaint.color = series[0].color
-            canvas.drawCircle(x(i), y(v), dp(2.8f), dotPaint)
+            canvas.drawCircle(cx, cy, dp(4.2f), dotPaint)
+            dotPaint.color = if (d.up) 0xFF34D88F.toInt() else 0xFFF26A5B.toInt()
+            canvas.drawCircle(cx, cy, dp(2.8f), dotPaint)
+            if (showLabels && d.label != null) {
+                markerText.color = dotPaint.color
+                val tw = markerText.measureText(d.label)
+                val tx = (cx - tw / 2).coerceIn(0f, plotW() - tw)
+                canvas.drawText(d.label, tx, (cy - dp(7f)).coerceAtLeast(dp(9f)), markerText)
+            }
         }
 
         // x labels from dates

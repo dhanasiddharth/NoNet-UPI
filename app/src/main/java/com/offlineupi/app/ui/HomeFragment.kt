@@ -21,6 +21,7 @@ import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -56,8 +57,8 @@ class HomeFragment : Fragment() {
         balanceStore = SecureBalanceStore(requireContext())
 
         binding.rvFeed.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvRecents.layoutManager =
-            LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
+        // rvRecents' layout manager is set in loadRecents() once the fit count
+        // is known (single row that fills the width, no scroll).
 
         binding.btnScanQr.setOnClickListener {
             startActivity(Intent(requireContext(), ScanQrActivity::class.java))
@@ -335,19 +336,35 @@ class HomeFragment : Fragment() {
         startActivity(intent)
     }
 
-    // ---- Recents (distinct *named* payees — app-saved or device-contact names) ----
+    // ---- Frequent payees: only places paid successfully ≥2 times ----
+    // One row that fills the width (no horizontal scroll); the most-paid show
+    // first, capped to what fits so nothing scrolls off.
     private fun loadRecents() {
-        val seen = LinkedHashMap<String, Transaction>()
-        for (t in store.getTransactions()) {
-            if (t.type != "payment") continue
-            val addr = t.payeeAddress ?: continue
-            val hasContactName =
-                ContactsHelper.lookupPhone(requireContext(), addr)?.name != null
-            if (t.storedName == null && !hasContactName) continue
-            if (!seen.containsKey(addr)) seen[addr] = t
-            if (seen.size >= MainActivity.MAX_RECENTS) break
+        val successful = store.getTransactions()
+            .filter { it.type == "payment" && it.status == "success" && it.payeeAddress != null }
+        val byPayee = successful.groupBy { it.payeeAddress!! }
+        val frequent = byPayee
+            .filter { it.value.size >= 2 }               // one-off places don't qualify
+            .map { (_, txns) -> txns.maxByOrNull { it.timestamp }!! to txns.size }
+            .sortedWith(compareByDescending<Pair<Transaction, Int>> { it.second } // most-paid first
+                .thenByDescending { it.first.timestamp })  // ties → most recent
+            .map { it.first }
+
+        if (frequent.isEmpty()) {
+            binding.rvRecents.visibility = View.GONE
+            return
         }
-        binding.rvRecents.adapter = RecentsAdapter(seen.values.toList()) { txn ->
+        binding.rvRecents.visibility = View.VISIBLE
+
+        // how many 72dp cells fit the row; then fill exactly that width
+        val rowWidth = resources.displayMetrics.widthPixels -
+            (40 * resources.displayMetrics.density).toInt()
+        val maxFit = (rowWidth / (72 * resources.displayMetrics.density)).toInt().coerceIn(3, 7)
+        val span = frequent.size.coerceIn(1, maxFit)
+        val shown = frequent.take(span)
+
+        binding.rvRecents.layoutManager = GridLayoutManager(requireContext(), span)
+        binding.rvRecents.adapter = RecentsAdapter(shown) { txn ->
             startPayment(txn.payeeAddress ?: return@RecentsAdapter, txn.payeeName)
         }
     }
