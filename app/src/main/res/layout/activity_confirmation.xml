@@ -7,12 +7,13 @@
     android:background="@color/bg_dark"
     android:fillViewport="true">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="24dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
         android:paddingTop="24dp"
-        android:paddingBottom="32dp">
+        android:paddingBottom="28dp">
 
         <!-- Title -->
         <TextView
@@ -23,191 +24,210 @@
             android:textColor="@color/text_primary"
             android:textSize="22sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif-medium"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            android:fontFamily="sans-serif-medium" />
 
-        <!-- Payment Card -->
+        <!-- Pay-to + amount card: avatar, name, editable address, hero amount -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardPayment"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardBackgroundColor="@color/card_bg"
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
-            app:layout_constraintTop_toBottomOf="@id/tvTitle"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="24dp">
+            android:layout_marginTop="20dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:gravity="center_horizontal"
+                android:paddingHorizontal="24dp"
+                android:paddingTop="28dp"
+                android:paddingBottom="26dp">
 
-                <!-- Pay To Row -->
+                <!-- Avatar -->
                 <TextView
-                    android:id="@+id/labelPayTo"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/label_pay_to"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:textAllCaps="true"
-                    android:letterSpacing="0.08" />
+                    android:id="@+id/tvAvatar"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:gravity="center"
+                    android:text="?"
+                    android:textColor="@color/accent_emerald_light"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_avatar_emerald" />
 
+                <!-- Payee name -->
                 <TextView
                     android:id="@+id/tvPayeeName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="@color/text_primary"
-                    android:textSize="20sp"
+                    android:textSize="19sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="20dp" />
+                    android:textAlignment="center"
+                    android:layout_marginTop="14dp" />
 
-                <!-- Divider -->
-                <View
-                    android:id="@+id/dividerPayee"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider" />
-
-                <!-- UPI ID / Phone Row -->
-                <TextView
-                    android:id="@+id/labelUpiId"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/label_upi_id"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:textAllCaps="true"
-                    android:letterSpacing="0.08"
-                    android:layout_marginTop="20dp" />
-
-                <!-- Editable in place (QR payees can be corrected) and, being an
-                     EditText, long-press gives native select & copy. -->
+                <!-- Editable address (QR payees can be corrected; long-press = copy) -->
                 <EditText
                     android:id="@+id/tvUpiId"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@null"
                     android:inputType="textEmailAddress|textNoSuggestions"
                     android:importantForAutofill="no"
                     android:maxLines="1"
+                    android:gravity="center"
                     android:textColor="@color/accent_emerald_light"
-                    android:textSize="16sp"
+                    android:textSize="14sp"
                     android:fontFamily="monospace"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="20dp" />
+                    android:layout_marginTop="2dp" />
 
-                <!-- Divider -->
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider" />
-
-                <!-- Amount (static - when QR has amount) -->
+                <!-- Amount label -->
                 <TextView
+                    android:id="@+id/tvAmountLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_amount"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textAllCaps="true"
-                    android:letterSpacing="0.08"
-                    android:layout_marginTop="20dp" />
+                    android:letterSpacing="0.1"
+                    android:layout_marginTop="22dp" />
 
+                <!-- Static amount (QR carried an amount) -->
                 <TextView
                     android:id="@+id/tvAmount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/accent_green"
-                    android:textSize="28sp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="40sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"
                     android:layout_marginTop="4dp"
                     android:visibility="gone" />
 
-                <!-- Amount Input (when QR has no amount) -->
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/tilAmountInput"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
+                <!-- Amount entry (no amount yet) — ₹ + big editable number -->
+                <LinearLayout
+                    android:id="@+id/layoutAmountEntry"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:hint="@string/hint_enter_amount"
-                    app:boxStrokeColor="@color/accent_emerald"
-                    app:hintTextColor="@color/text_secondary"
-                    app:prefixText="₹ "
-                    app:prefixTextColor="@color/text_secondary"
-                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="4dp"
                     android:visibility="gone">
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etAmount"
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:text="₹"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="30sp"
+                        android:textStyle="bold"
+                        android:layout_marginEnd="4dp" />
+
+                    <EditText
+                        android:id="@+id/etAmount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"
+                        android:minWidth="64dp"
+                        android:hint="0"
+                        android:textColorHint="@color/text_secondary"
                         android:inputType="numberDecimal"
                         android:textColor="@color/text_primary"
-                        android:textSize="18sp" />
+                        android:textSize="40sp"
+                        android:textStyle="bold"
+                        android:fontFamily="sans-serif-medium"
+                        android:maxLines="1"
+                        android:importantForAutofill="no" />
+                </LinearLayout>
 
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- Divider -->
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider" />
-
-                <!-- Remarks -->
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/tilRemarks"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/tvAmountError"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:hint="Remarks (optional)"
-                    app:boxStrokeColor="@color/accent_emerald"
-                    app:hintTextColor="@color/text_secondary"
-                    android:layout_marginTop="16dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etRemarks"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:maxLines="1" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
+                    android:textColor="@color/accent_red"
+                    android:textSize="12sp"
+                    android:layout_marginTop="6dp"
+                    android:visibility="gone" />
             </LinearLayout>
-
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- Recent payments with this payee (shown when there's history) -->
+        <TextView
+            android:id="@+id/tvRecentLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RECENT PAYMENTS"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:layout_marginTop="24dp"
+            android:layout_marginStart="4dp"
+            android:visibility="gone" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRecent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/card_stroke"
+            app:strokeWidth="1dp"
+            android:layout_marginTop="10dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/layoutRecent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="4dp" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Remarks -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilRemarks"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Remarks (optional)"
+            app:boxStrokeColor="@color/accent_emerald"
+            app:hintTextColor="@color/text_secondary"
+            android:layout_marginTop="20dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etRemarks"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Security notice -->
         <TextView
             android:id="@+id/tvSecurityNote"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/confirm_security_note"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
             android:textAlignment="center"
             android:drawablePadding="4dp"
-            app:layout_constraintTop_toBottomOf="@id/cardPayment"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="18dp" />
 
         <!-- Pay via USSD button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPayUssd"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="56dp"
             android:text="@string/btn_pay_ussd"
             android:textSize="16sp"
@@ -217,11 +237,8 @@
             app:icon="@drawable/ic_dialpad"
             app:iconGravity="textStart"
             app:iconPadding="8dp"
-            app:layout_constraintTop_toBottomOf="@id/tvSecurityNote"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="24dp" />
+            android:layout_marginTop="20dp" />
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>

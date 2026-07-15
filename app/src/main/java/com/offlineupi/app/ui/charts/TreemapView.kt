@@ -3,7 +3,6 @@ package com.offlineupi.app.ui.charts
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
@@ -48,13 +47,17 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
     private var animator: ValueAnimator? = null
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    // labels flip with the palette: white on the deep dark tiles, near-black on
+    // the pale light tiles (see values[-night]/colors treemap_label)
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE; isFakeBoldText = true
+        color = ContextCompat.getColor(context, R.color.treemap_label); isFakeBoldText = true
     }
     private val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xCCFFFFFF.toInt()
+        color = ContextCompat.getColor(context, R.color.treemap_label)
     }
     private val bg = ContextCompat.getColor(context, R.color.bg_dark)
+    // tiles blend this far toward the page surface (dark or light)
+    private val tileSurface = ContextCompat.getColor(context, R.color.treemap_surface)
 
     fun set(roots: List<Node>) {
         this.roots = roots
@@ -168,7 +171,7 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
             val n = nodes[i]
             // fills sit 25% toward the surface: hue identity stays, and the
             // white labels clear contrast on every bucket color
-            fill.color = mix(n.color, 0xFF121A15.toInt(), 0.25f)
+            fill.color = mix(n.color, tileSurface, 0.25f)
             canvas.drawRoundRect(
                 r.left + gap, r.top + gap, r.right - gap, r.bottom - gap, dp(3f), dp(3f), fill
             )
@@ -274,10 +277,10 @@ class TreemapView(context: Context, attrs: AttributeSet? = null) : View(context,
             return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
         }
 
-        /** Shade a base color toward the surface for depth-ranked children. */
-        fun shade(base: Int, rank: Int, count: Int): Int {
+        /** Shade a base color toward the [surface] for depth-ranked children. */
+        fun shade(base: Int, rank: Int, count: Int, surface: Int): Int {
             if (count <= 1) return base
-            return mix(base, 0xFF101713.toInt(), 0.38f * rank / (count - 1))
+            return mix(base, surface, 0.38f * rank / (count - 1))
         }
     }
 }

@@ -1,0 +1,54 @@
+<resources>
+    <!-- DARK palette — the original emerald-on-green-black design, unchanged.
+         Applied when the system (or the in-app toggle) selects night. -->
+
+    <!-- Backgrounds -->
+    <color name="bg_dark">#0A0F0D</color>
+    <color name="bg_scanner">#000000</color>
+    <color name="scanner_overlay">#CC000000</color>
+
+    <!-- Card -->
+    <color name="card_bg">#131A16</color>
+    <color name="card_raised">#192420</color>
+    <color name="card_stroke">#24302A</color>
+    <color name="divider">#212B26</color>
+
+    <!-- Text -->
+    <color name="text_primary">#ECF2EF</color>
+    <color name="text_secondary">#94A49C</color>
+    <color name="text_secondary_light">#B7C4BD</color>
+    <color name="white">#FFFFFF</color>
+
+    <!-- Brand accent -->
+    <color name="accent_emerald">#0E9E6E</color>
+    <color name="accent_emerald_light">#34D88F</color>
+    <color name="on_accent">#FFFFFF</color>
+
+    <!-- Semantic status -->
+    <color name="accent_green">#34D88F</color>
+    <color name="accent_amber">#F0A44B</color>
+    <color name="accent_red">#F26A5B</color>
+    <color name="status_progress">#7C8D85</color>
+
+    <!-- Mode-specific fills pulled out of drawables/code so they switch -->
+    <color name="pill_selected_fill">#123324</color>
+    <color name="banner_good">#10291D</color>
+    <color name="banner_bad">#2A1512</color>
+    <color name="avatar_bg_emerald">#1E4032</color>
+    <color name="avatar_bg_blue">#1D3A4E</color>
+    <color name="avatar_bg_purple">#43305A</color>
+    <color name="avatar_bg_amber">#4E3A20</color>
+    <color name="step_pending">#2A2D3E</color>
+
+    <!-- Chart structure -->
+    <color name="chart_grid">#1B2420</color>
+    <color name="chart_zero">#33403A</color>
+    <color name="chart_hair">#4A5A52</color>
+    <color name="chart_label_bg">#F5192420</color>
+    <color name="chart_muted">#94A49C</color>
+    <color name="chart_other">#3A4540</color>
+
+    <!-- Treemap -->
+    <color name="treemap_surface">#111813</color>
+    <color name="treemap_label">#CCFFFFFF</color>
+</resources>

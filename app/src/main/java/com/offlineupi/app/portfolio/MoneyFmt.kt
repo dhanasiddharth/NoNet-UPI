@@ -45,6 +45,21 @@ object MoneyFmt {
         }
     }
 
+    /** Market-cap scale: ₹17.4 L Cr / ₹8,400 Cr · $2.95T / $312B. */
+    fun cap(v: Double, currency: String): String {
+        val a = abs(v)
+        return if (currency == "USD") when {
+            a >= 1e12 -> "$%.2fT".format(v / 1e12)
+            a >= 1e9 -> "$%.1fB".format(v / 1e9)
+            a >= 1e6 -> "$%.0fM".format(v / 1e6)
+            else -> money(v, currency)
+        } else when {
+            a >= 1e12 -> "₹%.2f L Cr".format(v / 1e12)
+            a >= 1e7 -> "₹" + String.format(Locale("en", "IN"), "%,.0f", v / 1e7) + " Cr"
+            else -> inr(v)
+        }
+    }
+
     /** Fractional rate (0.12 → +12.0%). */
     fun pct(v: Double?): String =
         v?.let { (if (it >= 0) "+" else "") + "%.1f%%".format(it * 100) } ?: "—"

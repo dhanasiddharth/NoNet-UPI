@@ -32,7 +32,7 @@ data class Trade(
  * comfort zone on-device.
  */
 class PortfolioDb(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "portfolio.db", null, 2) {
+    SQLiteOpenHelper(context.applicationContext, "portfolio.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE instrument (isin TEXT PRIMARY KEY, yahoo TEXT, currency TEXT, type TEXT, name TEXT)")
@@ -41,10 +41,17 @@ class PortfolioDb(context: Context) :
         db.execSQL("CREATE INDEX idx_trade_isin ON trade(isin)")
         db.execSQL("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
         createAlertTables(db)
+        createFundamentalsTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if (old < 2) createAlertTables(db)
+        if (old < 3) createFundamentalsTable(db)
+    }
+
+    private fun createFundamentalsTable(db: SQLiteDatabase) {
+        // raw quoteSummary result per symbol; a 24h-ish cache, not a record
+        db.execSQL("CREATE TABLE fundamentals (symbol TEXT PRIMARY KEY, json TEXT, fetched_at INTEGER)")
     }
 
     private fun createAlertTables(db: SQLiteDatabase) {
@@ -137,6 +144,19 @@ class PortfolioDb(context: Context) :
         .rawQuery("SELECT DISTINCT symbol FROM price", null).use { c ->
             buildSet { while (c.moveToNext()) add(c.getString(0)) }
         }
+
+    // ---- fundamentals (cached quoteSummary JSON) ----
+    fun fundamentals(symbol: String): Pair<String, Long>? = readableDatabase
+        .rawQuery("SELECT json, fetched_at FROM fundamentals WHERE symbol=?", arrayOf(symbol)).use {
+            if (it.moveToFirst()) it.getString(0) to it.getLong(1) else null
+        }
+
+    fun setFundamentals(symbol: String, json: String) {
+        writableDatabase.execSQL(
+            "INSERT OR REPLACE INTO fundamentals(symbol,json,fetched_at) VALUES(?,?,?)",
+            arrayOf(symbol, json, System.currentTimeMillis())
+        )
+    }
 
     // ---- alert rules (threshold cascade: isin > bucket > default) ----
     fun alertRules(): Map<String, Double> = readableDatabase

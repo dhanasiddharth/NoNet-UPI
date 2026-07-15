@@ -1,31 +1,56 @@
 <resources>
-    <!-- Emerald-on-green-black palette (Finance v2) -->
+    <!-- LIGHT palette (default configuration). The dark values live in
+         values-night/colors.xml. Names are kept from the original dark-only
+         design (e.g. "bg_dark" is really "app background") so the hundreds of
+         @color references across layouts and code didn't have to change. -->
 
     <!-- Backgrounds -->
-    <color name="bg_dark">#0A0F0D</color>
-    <color name="bg_scanner">#000000</color>
+    <color name="bg_dark">#E9EFEC</color>
+    <color name="bg_scanner">#000000</color>          <!-- camera view stays dark -->
     <color name="scanner_overlay">#CC000000</color>
 
-    <!-- Card -->
-    <color name="card_bg">#131A16</color>
-    <color name="card_raised">#192420</color>
-    <color name="card_stroke">#24302A</color>
-    <color name="divider">#212B26</color>
+    <!-- Card / surface hierarchy: page < card < raised -->
+    <color name="card_bg">#F5F9F7</color>
+    <color name="card_raised">#FFFFFF</color>
+    <color name="card_stroke">#D3DCD7</color>
+    <color name="divider">#DEE5E1</color>
 
     <!-- Text -->
-    <color name="text_primary">#ECF2EF</color>
-    <color name="text_secondary">#94A49C</color>
-    <color name="text_secondary_light">#B7C4BD</color>
+    <color name="text_primary">#12211B</color>
+    <color name="text_secondary">#5B6A63</color>
+    <color name="text_secondary_light">#44514B</color> <!-- higher-contrast (axis labels) -->
     <color name="white">#FFFFFF</color>
 
-    <!-- Brand accent -->
-    <color name="accent_emerald">#0E9E6E</color>
-    <color name="accent_emerald_light">#34D88F</color>
+    <!-- Brand accent (deepened so it reads on a light ground) -->
+    <color name="accent_emerald">#0C8F63</color>
+    <color name="accent_emerald_light">#0A7A52</color> <!-- selected/link text on light -->
     <color name="on_accent">#FFFFFF</color>
 
-    <!-- Semantic status -->
-    <color name="accent_green">#34D88F</color>
-    <color name="accent_amber">#F0A44B</color>
-    <color name="accent_red">#F26A5B</color>
-    <color name="status_progress">#7C8D85</color>
+    <!-- Semantic status (deepened for contrast on light) -->
+    <color name="accent_green">#0E9257</color>
+    <color name="accent_amber">#B0730E</color>
+    <color name="accent_red">#CE3A2A</color>
+    <color name="status_progress">#5B6A63</color>
+
+    <!-- Mode-specific fills pulled out of drawables/code so they switch -->
+    <color name="pill_selected_fill">#D2ECDF</color>
+    <color name="banner_good">#D9F0E4</color>
+    <color name="banner_bad">#F8E2DE</color>
+    <color name="avatar_bg_emerald">#CFEBDD</color>
+    <color name="avatar_bg_blue">#CFE1EF</color>
+    <color name="avatar_bg_purple">#E4D8F0</color>
+    <color name="avatar_bg_amber">#F1E3CE</color>
+    <color name="step_pending">#D6DCE2</color>
+
+    <!-- Chart structure (grid / axes / crosshair / marker plate / benchmark) -->
+    <color name="chart_grid">#DEE5E0</color>
+    <color name="chart_zero">#C1CBC6</color>
+    <color name="chart_hair">#8A968F</color>
+    <color name="chart_label_bg">#F2FFFFFF</color>
+    <color name="chart_muted">#7C8A83</color>
+    <color name="chart_other">#C7D0CB</color>
+
+    <!-- Treemap: tiles blend toward this surface; labels ride on top -->
+    <color name="treemap_surface">#E9EFEC</color>
+    <color name="treemap_label">#E6101713</color>
 </resources>

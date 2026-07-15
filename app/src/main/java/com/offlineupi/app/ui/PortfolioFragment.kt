@@ -72,8 +72,9 @@ class PortfolioFragment : Fragment() {
             Bucket.Gold to 0xFFC8842E.toInt(), Bucket.Crypto to 0xFFA17AE0.toInt(),
         )
     }
-    private val brand = 0xFF34D88F.toInt()
-    private val mutedLine = 0xFF94A49C.toInt()
+    // resolved per call so they follow the active light/dark palette
+    private val brand get() = requireContext().getColor(R.color.accent_green)
+    private val mutedLine get() = requireContext().getColor(R.color.chart_muted)
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -109,6 +110,9 @@ class PortfolioFragment : Fragment() {
             )
             snapshot?.let { renderChart(it) }
         }
+        // Panning the chart re-frames the whole top of the page (hero growth,
+        // flow, range row) to the visible window — not just the graph.
+        binding.chart.onViewportChange = { st, en -> snapshot?.let { applyWindow(it, st, en) } }
         renderChartModePills()
     }
 
@@ -395,25 +399,52 @@ class PortfolioFragment : Fragment() {
     @SuppressLint("SetTextI18n")
     private fun renderHero(s: Snapshot) {
         val sc = src(s)
-        val v = sc.values.last()
-        binding.tvHeroValue.text = mask(money(v, sc.ccy))
-        // Split the range's change into two parts the user asked to see apart:
-        //  · growth — what the holdings gained/lost on the market
-        //  · added/removed — money you put in or took out over the window
-        // (total value change = growth + added). The chip is market growth so
-        // it isn't inflated by fresh deposits.
-        val i0 = startIndex(s)
-        val v0 = (i0 until sc.values.size).firstOrNull { sc.values[it] > 0 }
-            ?.let { sc.values[it] } ?: v
-        val added = sc.invested.last() - sc.invested[i0]
-        val growth = (v - v0) - added
-        val growthBase = v0 + added.coerceAtLeast(0.0)
-        val growthPct = if (growthBase > 0) growth / growthBase * 100 else 0.0
-        chip(binding.tvDayChip, if (abs(growthPct) < 0.05) null else growth > 0,
-            mask("${if (growth >= 0) "▲" else "▼"} ${money(abs(growth), sc.ccy)} · ${"%.1f".format(abs(growthPct))}% · $range"))
+        // The headline is current net worth; the growth chip + flow sub-line are
+        // window-dependent and set by applyWindow (which renderChart calls, and
+        // which fires again on every pan — so the top tracks the visible window).
+        binding.tvHeroValue.text = mask(money(sc.values.last(), sc.ccy))
+        binding.tvAfterTax.text = mask("≈ " + money(
+            PortfolioAnalytics.afterTax(sc.values.last(), sc.invested.last()), sc.ccy)
+            + " after tax")
         binding.tvXirrChip.text = "XIRR " + pct(sc.xirr)
+    }
 
-        val asOf = LocalDate.ofEpochDay(s.asOfDay).format(DateTimeFormatter.ofPattern("d MMM"))
+    /**
+     * Recomputes every window-dependent number — the hero growth chip & flow
+     * sub-line and the range row under the chart — for an arbitrary visible
+     * span [startIdx, endIdx]. Called once per render with the chart's viewport
+     * and again from onViewportChange, so panning the chart re-frames the whole
+     * top of the page, not just the graph.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun applyWindow(s: Snapshot, startIdx: Int, endIdx: Int) {
+        val sc = src(s)
+        val n = sc.values.size
+        val i0 = startIdx.coerceIn(0, n - 1)
+        val iE = endIdx.coerceIn(i0, n - 1)
+
+        // Split the change into two parts the user asked to see apart:
+        //  · growth — what the holdings gained/lost on the market
+        //  · added/removed — money put in or taken out over the window
+        val vEnd = (iE downTo i0).firstOrNull { sc.values[it] > 0 }?.let { sc.values[it] } ?: 0.0
+        val i0v = (i0..iE).firstOrNull { sc.values[it] > 0 }
+        val v0 = i0v?.let { sc.values[it] } ?: vEnd
+        val added = sc.invested[iE] - sc.invested[i0]
+        // growth anchors its invested-delta at the first OWNED day: v0 already
+        // contains that day's buy, so counting it again would double-subtract
+        // (windows can start before the selection's first trade)
+        val addedSinceOwned = i0v?.let { sc.invested[iE] - sc.invested[it] } ?: added
+        val growth = (vEnd - v0) - addedSinceOwned
+        val base = v0 + addedSinceOwned.coerceAtLeast(0.0)
+        val gp = if (base > 0) growth / base else 0.0
+
+        val fmtD = DateTimeFormatter.ofPattern("d MMM")
+        val atLatest = iE >= n - 1
+        val winLabel = if (atLatest) range else
+            "${LocalDate.ofEpochDay(s.days[i0]).format(fmtD)}–${LocalDate.ofEpochDay(s.days[iE]).format(fmtD)}"
+
+        chip(binding.tvDayChip, if (abs(gp) < 5e-4) null else growth > 0,
+            mask("${if (growth >= 0) "▲" else "▼"} ${money(abs(growth), sc.ccy)} · ${"%.1f".format(abs(gp) * 100)}% · $winLabel"))
         val flow = when {
             added > 1.0 -> "added ${mask(money(added, sc.ccy))}"
             added < -1.0 -> "withdrew ${mask(money(-added, sc.ccy))}"
@@ -422,8 +453,50 @@ class PortfolioFragment : Fragment() {
         binding.tvHeroSub.text = buildString {
             append(sc.label)
             if (flow != null) append(" · $flow")
-            append(" · as of $asOf")
+            append(if (atLatest) " · as of ${LocalDate.ofEpochDay(s.days[iE]).format(fmtD)}"
+                   else " · to ${LocalDate.ofEpochDay(s.days[iE]).format(fmtD)}")
         }
+
+        // range row under the chart follows the active lens
+        if (chartMode == "Perf") {
+            fun rel(arr: DoubleArray): Double? {
+                val b = (i0..iE).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                val e = (iE downTo i0).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
+                return ((1 + e / 100) / (1 + b / 100) - 1) * 100
+            }
+            val yNow = rel(twrSeries(sc.values, sc.invested)) ?: 0.0
+            val gap = yNow - (rel(twrSeries(sc.bench, sc.invested)) ?: 0.0)
+            binding.tvRangeValue.text = "${if (yNow >= 0) "+" else ""}${"%.1f".format(yNow)}%"
+            chip(binding.tvRangeChange, if (abs(gap) < 0.05) null else gap > 0,
+                "${if (gap >= 0) "+" else ""}${"%.1f".format(gap)} pts vs index")
+            binding.tvRangeMeta.text = winLabel
+        } else {
+            binding.tvRangeValue.text = mask(money(vEnd, sc.ccy))
+            chip(binding.tvRangeChange, if (abs(gp) < 1e-4) null else growth > 0,
+                mask("${if (growth >= 0) "+" else "−"}${money(abs(growth), sc.ccy)} · ${"%.1f".format(abs(gp) * 100)}%"))
+            binding.tvRangeMeta.text =
+                if (added > 1000) "$winLabel · added ${mask(money(added, sc.ccy))}" else winLabel
+        }
+    }
+
+    /** Time-weighted return %: each day's growth measured after backing out that
+     *  day's contribution, so deposits and sells never move the line. */
+    private fun twrSeries(values: DoubleArray, invested: DoubleArray): DoubleArray {
+        val n = values.size
+        val out = DoubleArray(n) { Double.NaN }
+        var level = 1.0
+        var prev = Double.NaN
+        for (k in 0 until n) {
+            val v = values[k]
+            if (v.isNaN() || v <= 0) continue
+            if (!prev.isNaN() && k > 0) {
+                val b = prev + (invested[k] - invested[k - 1])
+                if (b > 0) level *= v / b
+            }
+            prev = v
+            out[k] = (level - 1) * 100
+        }
+        return out
     }
 
     private fun renderTiles(s: Snapshot) {
@@ -474,7 +547,7 @@ class PortfolioFragment : Fragment() {
         return DoubleArray(64) { i -> this[from + (i * stride).toInt().coerceAtMost(n - 1)] }
     }
 
-    private val ranges = listOf("1W", "1M", "3M", "6M", "YTD", "1Y", "All")
+    private val ranges = listOf("1W", "1M", "3M", "6M", "1Y", "All")
 
     private fun renderRanges() {
         val wrap = binding.layoutRanges
@@ -507,8 +580,10 @@ class PortfolioFragment : Fragment() {
     private fun startIndex(s: Snapshot): Int {
         val endDay = s.asOfDay
         val fromDay = when (range) {
-            "All" -> return 0
-            "YTD" -> LocalDate.ofEpochDay(endDay).withDayOfYear(1).toEpochDay()
+            // All still falls through the zero-skip below: with a bucket subset
+            // selected, the calendar starts at the FIRST trade overall (e.g. a
+            // 2018 crypto buy), and years of flat zero would crush the graph
+            "All" -> Long.MIN_VALUE
             else -> endDay - mapOf("1W" to 7L, "1M" to 30L, "3M" to 91L, "6M" to 182L, "1Y" to 365L).getValue(range)
         }
         var i = s.days.indexOfFirst { it >= fromDay }
@@ -527,45 +602,25 @@ class PortfolioFragment : Fragment() {
         val dateFmt = DateTimeFormatter.ofPattern("d MMM yy")
 
         // trade points = days the net contribution changed; label the amount
-        // (hidden when masked). The chart only draws labels when few are in view.
+        // (hidden when masked). Nearby markers merge into one combined number.
         val tradeDots = buildList {
             for (k in 1 until n) {
                 val flow = sc.invested[k] - sc.invested[k - 1]
                 if (abs(flow) > 1.0) add(LineChartView.Dot(
-                    k, if (masked) null else (if (flow >= 0) "+" else "−") + money(abs(flow), sc.ccy),
+                    k, value = flow,
+                    label = if (masked) null else (if (flow >= 0) "+" else "−") + money(abs(flow), sc.ccy),
                     up = flow >= 0
                 ))
             }
         }
+        binding.chart.dotLabelFormatter =
+            { v -> (if (v >= 0) "+" else "−") + money(abs(v), sc.ccy) }
+        // performance line is busy — reveal trade amounts only on scrub
+        binding.chart.scrubDotLabels = chartMode == "Perf"
 
         if (chartMode == "Perf") {
-            // time-weighted return over full history: each day's growth is
-            // measured after backing out that day's contributions, so deposits
-            // and sells never move the line. The chart re-anchors 0% to the
-            // visible window (rebase) so panning stays meaningful.
-            fun twr(values: DoubleArray): DoubleArray {
-                val out = DoubleArray(n) { Double.NaN }
-                var level = 1.0
-                var prev = Double.NaN
-                for (k in 0 until n) {
-                    val v = values[k]
-                    if (v.isNaN() || v <= 0) continue
-                    if (!prev.isNaN() && k > 0) {
-                        val base = prev + (sc.invested[k] - sc.invested[k - 1])
-                        if (base > 0) level *= v / base
-                    }
-                    prev = v
-                    out[k] = (level - 1) * 100
-                }
-                return out
-            }
-            val you = twr(sc.values)
-            val bench = twr(sc.bench)
-            fun windowRel(arr: DoubleArray): Double? {
-                val b = (i0 until n).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
-                val e = (n - 1 downTo i0).firstOrNull { !arr[it].isNaN() }?.let { arr[it] } ?: return null
-                return ((1 + e / 100) / (1 + b / 100) - 1) * 100
-            }
+            // time-weighted return over full history; the chart re-anchors 0% to
+            // the visible window (rebase) so panning stays meaningful.
             binding.chart.allowNegative = true
             binding.chart.yFormatter = { "%.0f%%".format(it) }
             binding.chart.scrubFormatter = { _, day, v ->
@@ -573,45 +628,31 @@ class PortfolioFragment : Fragment() {
                     " · ${if (v >= 0) "+" else ""}${"%.1f".format(v)}%"
             }
             binding.chart.set(listOf(
-                LineChartView.Series(you, sc.color, area = true),
-                LineChartView.Series(bench, mutedLine, widthDp = 1.8f),
+                LineChartView.Series(twrSeries(sc.values, sc.invested), sc.color, area = true),
+                LineChartView.Series(twrSeries(sc.bench, sc.invested), mutedLine, widthDp = 1.8f),
             ), s.days, tradeDots, win, rebase = true)
             binding.tvLegend.text = "— return %   — ${sc.benchName}   ● trades"
-            val yNow = windowRel(you) ?: 0.0
-            val gap = yNow - (windowRel(bench) ?: 0.0)
-            binding.tvRangeValue.text = "${if (yNow >= 0) "+" else ""}${"%.1f".format(yNow)}%"
-            chip(binding.tvRangeChange, if (abs(gap) < 0.05) null else gap > 0,
-                "${if (gap >= 0) "+" else ""}${"%.1f".format(gap)} pts vs index")
-            binding.tvRangeMeta.text = range
-            return
+        } else {
+            val lines = mutableListOf(LineChartView.Series(sc.values, sc.color, area = true))
+            var legend = "— ${sc.label} value"
+            if (compare) {
+                lines += LineChartView.Series(sc.bench, mutedLine, widthDp = 1.8f)
+                lines += LineChartView.Series(sc.invested, mutedLine, widthDp = 1.4f, dashed = true)
+                legend = "— ${sc.label}   — Same money in ${sc.benchName}   ┈ Invested"
+            }
+            binding.chart.allowNegative = false
+            binding.chart.yFormatter = { com.offlineupi.app.portfolio.MoneyFmt.axis(it, sc.ccy) }
+            binding.chart.scrubFormatter = { _, day, v ->
+                LocalDate.ofEpochDay(day).format(dateFmt) + " · " + mask(money(v, sc.ccy))
+            }
+            binding.chart.set(lines, s.days, tradeDots, win, rebase = false)
+            binding.tvLegend.text = "$legend   ● trades"
         }
 
-        val lines = mutableListOf(LineChartView.Series(sc.values, sc.color, area = true))
-        var legend = "— ${sc.label} value"
-        if (compare) {
-            lines += LineChartView.Series(sc.bench, mutedLine, widthDp = 1.8f)
-            lines += LineChartView.Series(sc.invested, mutedLine, widthDp = 1.4f, dashed = true)
-            legend = "— ${sc.label}   — Same money in ${sc.benchName}   ┈ Invested"
-        }
-        binding.chart.allowNegative = false
-        binding.chart.yFormatter = { com.offlineupi.app.portfolio.MoneyFmt.axis(it, sc.ccy) }
-        binding.chart.scrubFormatter = { _, day, v ->
-            LocalDate.ofEpochDay(day).format(dateFmt) + " · " + mask(money(v, sc.ccy))
-        }
-        binding.chart.set(lines, s.days, tradeDots, win, rebase = false)
-        binding.tvLegend.text = "$legend   ● trades"
-
-        val v = sc.values.last()
-        val v0 = (i0 until n).firstOrNull { sc.values[it] > 0 }?.let { sc.values[it] } ?: 1.0
-        val added = sc.invested.last() - sc.invested[i0]
-        val gain = v - v0 - added
-        val base = v0 + added.coerceAtLeast(0.0)
-        val gp = if (base > 0) gain / base else 0.0
-        binding.tvRangeValue.text = mask(money(v, sc.ccy))
-        chip(binding.tvRangeChange, if (abs(gp) < 1e-4) null else gain > 0,
-            mask("${if (gain >= 0) "+" else "−"}${money(abs(gain), sc.ccy)} · ${"%.1f".format(abs(gp) * 100)}%"))
-        binding.tvRangeMeta.text =
-            if (added > 1000) "$range · added ${mask(money(added, sc.ccy))}" else range
+        // hero + range row track the chart's actual viewport (kept across lens
+        // switches and pans); onViewportChange re-runs this as the user pans.
+        val (vs, ve) = binding.chart.viewport()
+        applyWindow(s, vs, ve)
     }
 
     private fun renderDotPlot(s: Snapshot) {

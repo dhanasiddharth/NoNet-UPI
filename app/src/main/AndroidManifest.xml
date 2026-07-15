@@ -19,6 +19,7 @@
     <uses-feature android:name="android.hardware.telephony" android:required="true" />
 
     <application
+        android:name=".FinanceApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -84,6 +85,11 @@
 
         <activity
             android:name=".ui.AlertsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".ui.PriceSyncSettingsActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

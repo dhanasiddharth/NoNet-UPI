@@ -13,8 +13,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.graphics.Typeface
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -26,8 +30,11 @@ import com.offlineupi.app.R
 import com.offlineupi.app.accessibility.UssdAccessibilityService
 import com.offlineupi.app.databinding.ActivityConfirmationBinding
 import com.offlineupi.app.data.RecipientStore
+import com.offlineupi.app.data.Transaction
+import com.offlineupi.app.data.TransactionStore
 import com.offlineupi.app.model.UpiPaymentData
 import com.offlineupi.app.util.ContactsHelper
+import com.offlineupi.app.util.TimeFmt
 import com.offlineupi.app.util.UssdCodeBuilder
 import com.offlineupi.app.util.formatIndianNumber
 import com.offlineupi.app.util.normalizeIndianMobile
@@ -67,6 +74,7 @@ class ConfirmationActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityConfirmationBinding
     private lateinit var recipientStore: RecipientStore
+    private lateinit var txnStore: TransactionStore
     private val viewModel: ConfirmationViewModel by viewModels()
 
     // Holds the USSD string while waiting for permission result
@@ -95,6 +103,7 @@ class ConfirmationActivity : AppCompatActivity() {
         applySystemBarInsets(binding.root)
 
         recipientStore = RecipientStore(this)
+        txnStore = TransactionStore(this)
 
         val payeeAddress = intent.getStringExtra(EXTRA_PAYEE_ADDRESS)
         val payeeName   = intent.getStringExtra(EXTRA_PAYEE_NAME)
@@ -125,39 +134,43 @@ class ConfirmationActivity : AppCompatActivity() {
     }
 
     private fun setupUI(data: UpiPaymentData) {
-        if (payeeType == TYPE_PHONE) {
-            binding.labelUpiId.text = "Phone Number"
-            // Raw digits, not "+91 xx xxx" display formatting — the field is
-            // editable and the text is what gets dialed.
-            binding.tvUpiId.setText(data.payeeAddress)
-            // Device-contact name is display-only: it never makes a recipient
-            // "known" — the bank name is still captured via the USSD flow.
-            val contactName = ContactsHelper.lookupPhone(this, data.payeeAddress)?.name
-            val shownName = knownRecipientName ?: contactName
-            if (!shownName.isNullOrBlank()) {
-                binding.labelPayTo.visibility = View.VISIBLE
-                binding.tvPayeeName.visibility = View.VISIBLE
-                binding.dividerPayee.visibility = View.VISIBLE
-                binding.tvPayeeName.text = shownName
-                if (initialPayeeName.isNullOrBlank()) initialPayeeName = contactName
-            } else {
-                // Unknown — name will be captured from the USSD flow.
-                binding.labelPayTo.visibility = View.GONE
-                binding.tvPayeeName.visibility = View.GONE
-                binding.dividerPayee.visibility = View.GONE
+        val address = data.payeeAddress
+
+        // Name priority: user label > remembered > device contact > QR name.
+        // Contact match covers phones AND UPI IDs filed in a contact's notes.
+        // Device-contact name is display-only — it never makes a recipient
+        // "known"; the bank name is still captured via the USSD flow.
+        val contactName = ContactsHelper.lookup(this, address)?.name
+        val shownName = (com.offlineupi.app.data.PayeeMeta.label(this, address)
+            ?: knownRecipientName ?: contactName
+            ?: data.payeeName.takeIf { it.isNotBlank() && it != "Unknown Payee" })
+        if (payeeType == TYPE_PHONE && initialPayeeName.isNullOrBlank()) initialPayeeName = contactName
+
+        binding.tvPayeeName.text = shownName
+            ?: if (payeeType == TYPE_PHONE) "New payee" else address
+        binding.tvUpiId.setText(address)
+        binding.tvAvatar.text = MainActivity.initials(shownName, address)
+        binding.tvAvatar.setBackgroundResource(MainActivity.avatarBgFor(address))
+        ContactsHelper.applyPhotoToAvatar(binding.tvAvatar, address)
+        // long-press the name → label & favourite editor. Refresh only the
+        // name on save: re-running setupUI would reset an edited address
+        // field and re-trigger the amount keyboard.
+        binding.tvPayeeName.setOnLongClickListener {
+            PayeeEdit.show(this, address, shownName) {
+                com.offlineupi.app.data.PayeeMeta.label(this, address)
+                    ?.let { l -> binding.tvPayeeName.text = l }
             }
-        } else {
-            binding.tvPayeeName.text = data.payeeName
-            binding.tvUpiId.setText(data.payeeAddress)
+            true
         }
 
         if (data.hasAmount) {
-            binding.tvAmount.text      = getString(R.string.currency_format, formatIndianNumber(data.amount!!))
+            binding.tvAmount.text = getString(R.string.currency_format, formatIndianNumber(data.amount!!))
             binding.tvAmount.isVisible = true
-            binding.tilAmountInput.isVisible = false
+            binding.layoutAmountEntry.isVisible = false
         } else {
+            // Directly ask for the amount: focus the field and raise the keypad.
             binding.tvAmount.isVisible = false
-            binding.tilAmountInput.isVisible = true
+            binding.layoutAmountEntry.isVisible = true
             binding.etAmount.requestFocus()
             binding.etAmount.postDelayed({
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
@@ -170,12 +183,96 @@ class ConfirmationActivity : AppCompatActivity() {
             })
         }
 
+        renderRecent(address, shownName)
         binding.btnPayUssd.setOnClickListener { handlePayment(data) }
     }
 
+    /**
+     * A known recipient's recent payments, newest first, shown near the top for
+     * context. In amount-entry mode, tapping a row prefills that amount — a
+     * quick "same as last time" shortcut.
+     */
+    private fun renderRecent(address: String, payeeName: String?) {
+        val past = txnStore.getTransactions()
+            .filter { it.type == "payment" && it.payeeAddress == address }
+            .sortedByDescending { it.timestamp }
+        if (past.isEmpty()) {
+            binding.tvRecentLabel.visibility = View.GONE
+            binding.cardRecent.visibility = View.GONE
+            return
+        }
+        val first = payeeName?.trim()?.substringBefore(" ")?.takeIf { it.isNotBlank() }
+        binding.tvRecentLabel.text = if (first != null) "RECENT WITH ${first.uppercase()}" else "RECENT PAYMENTS"
+        binding.tvRecentLabel.visibility = View.VISIBLE
+        binding.cardRecent.visibility = View.VISIBLE
+
+        val wrap = binding.layoutRecent
+        wrap.removeAllViews()
+        val editable = binding.layoutAmountEntry.isVisible
+        val shown = past.take(3)
+        shown.forEachIndexed { i, t ->
+            wrap.addView(recentRow(t, editable))
+            if (i < shown.size - 1) wrap.addView(View(this).apply {
+                setBackgroundColor(getColor(R.color.divider))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        }
+    }
+
+    private fun recentRow(t: Transaction, editable: Boolean): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, dp(12))
+            if (editable && !t.amount.isNullOrBlank()) {
+                setBackgroundResource(R.drawable.ripple_group)
+                setOnClickListener {
+                    binding.etAmount.setText(t.amount)
+                    binding.etAmount.setSelection(binding.etAmount.text?.length ?: 0)
+                    viewModel.clearAmountError()
+                }
+            }
+        }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(TextView(this).apply {
+            text = t.amount?.let { "₹${formatIndianNumber(it)}" } ?: "—"
+            setTextColor(getColor(R.color.text_primary))
+            textSize = 15f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        })
+        col.addView(TextView(this).apply {
+            text = TimeFmt.dateTime(t.timestamp)
+            setTextColor(getColor(R.color.text_secondary))
+            textSize = 11.5f
+            setPadding(0, dp(2), 0, 0)
+        })
+        row.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(statusChip(t.status))
+        return row
+    }
+
+    private fun statusChip(status: String): TextView {
+        val (label, bg, color) = when (status) {
+            "success" -> Triple("VERIFIED", R.drawable.bg_chip_verified, R.color.accent_green)
+            "reversed" -> Triple("REVERSED", R.drawable.bg_chip_reversed, R.color.accent_amber)
+            "pending" -> Triple("CHECKING", R.drawable.bg_chip_checking, R.color.status_progress)
+            else -> Triple("FAILED", R.drawable.bg_chip_failed, R.color.accent_red)
+        }
+        return TextView(this).apply {
+            text = label
+            setBackgroundResource(bg)
+            setTextColor(getColor(color))
+            textSize = 10.5f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setPadding(dp(8), dp(3), dp(8), dp(3))
+        }
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
     private fun observeViewModel() {
         viewModel.amountError.observe(this) { error ->
-            binding.tilAmountInput.error = error
+            binding.tvAmountError.text = error
+            binding.tvAmountError.isVisible = !error.isNullOrBlank()
         }
     }
 

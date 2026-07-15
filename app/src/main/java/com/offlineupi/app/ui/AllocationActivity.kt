@@ -41,7 +41,8 @@ class AllocationActivity : AppCompatActivity() {
     private val modes = listOf("Market", "Sector", "Holdings")
     private var mode = "Market"
 
-    private val otherColor = 0xFF3A4540.toInt()
+    private val otherColor get() = getColor(R.color.chart_other)
+    private val treemapSurface get() = getColor(R.color.treemap_surface)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -141,7 +142,7 @@ class AllocationActivity : AppCompatActivity() {
                 id = h.instrument.isin, label = h.instrument.name,
                 amount = MoneyFmt.money(h.value, h.instrument.currency),
                 value = h.valueInr,
-                color = base?.let { TreemapView.shade(it, i, count) }
+                color = base?.let { TreemapView.shade(it, i, count, treemapSurface) }
                     ?: PortfolioUi.bucketColors.getValue(h.bucket),
             )
         }
@@ -166,7 +167,7 @@ class AllocationActivity : AppCompatActivity() {
             val rank = rankInBucket.getOrDefault(b, 0)
             rankInBucket[b] = rank + 1
             val color = TreemapView.shade(
-                PortfolioUi.bucketColors.getValue(b), rank, countInBucket.getValue(b))
+                PortfolioUi.bucketColors.getValue(b), rank, countInBucket.getValue(b), treemapSurface)
             TreemapView.Node(
                 id = "sector:$sector", label = sector,
                 amount = amountFor(list),
@@ -188,7 +189,7 @@ class AllocationActivity : AppCompatActivity() {
                 val groups = holdings.groupBy { it.sector }.entries
                     .sortedByDescending { g -> g.value.sumOf { it.valueInr } }
                 groups.mapIndexed { i, (sector, list) ->
-                    val color = TreemapView.shade(base, i, groups.size)
+                    val color = TreemapView.shade(base, i, groups.size, treemapSurface)
                     TreemapView.Node(
                         id = "sector:${b.name}:$sector", label = sector,
                         amount = MoneyFmt.money(list.sumOf { it.value }, b.currency),

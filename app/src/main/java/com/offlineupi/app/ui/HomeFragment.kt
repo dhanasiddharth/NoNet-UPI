@@ -336,16 +336,26 @@ class HomeFragment : Fragment() {
         startActivity(intent)
     }
 
-    // ---- Frequent payees: only places paid successfully ≥2 times ----
-    // One row that fills the width (no horizontal scroll); the most-paid show
-    // first, capped to what fits so nothing scrolls off.
+    // ---- Quick-pay row: favourites pinned first, then places paid ≥2 times ----
+    // One row that fills the width (no horizontal scroll); capped to what fits
+    // so nothing scrolls off.
     private fun loadRecents() {
-        val successful = store.getTransactions()
-            .filter { it.type == "payment" && it.status == "success" && it.payeeAddress != null }
+        val payments = store.getTransactions()
+            .filter { it.type == "payment" && it.payeeAddress != null }
+        val successful = payments.filter { it.status == "success" }
         val byPayee = successful.groupBy { it.payeeAddress!! }
-        val frequent = byPayee
+        val favSet = com.offlineupi.app.data.PayeeMeta.favourites(requireContext())
+
+        fun latest(txns: List<Transaction>) = txns.maxByOrNull { it.timestamp }!!
+        // a favourite stays pinned even with no successful payment yet
+        val pinned = favSet.mapNotNull { addr ->
+            (byPayee[addr] ?: payments.filter { it.payeeAddress == addr }.ifEmpty { null })
+                ?.let { latest(it) to it.size }
+        }.sortedByDescending { it.second }.map { it.first }
+        val frequent = pinned + byPayee
+            .filterKeys { it !in favSet }
             .filter { it.value.size >= 2 }               // one-off places don't qualify
-            .map { (_, txns) -> txns.maxByOrNull { it.timestamp }!! to txns.size }
+            .map { (_, txns) -> latest(txns) to txns.size }
             .sortedWith(compareByDescending<Pair<Transaction, Int>> { it.second } // most-paid first
                 .thenByDescending { it.first.timestamp })  // ties → most recent
             .map { it.first }
@@ -364,7 +374,10 @@ class HomeFragment : Fragment() {
         val shown = frequent.take(span)
 
         binding.rvRecents.layoutManager = GridLayoutManager(requireContext(), span)
-        binding.rvRecents.adapter = RecentsAdapter(shown) { txn ->
+        binding.rvRecents.adapter = RecentsAdapter(shown, onLongClick = { txn ->
+            PayeeEdit.show(requireContext(), txn.payeeAddress ?: return@RecentsAdapter,
+                txn.storedName) { loadRecents(); loadFeed() }
+        }) { txn ->
             startPayment(txn.payeeAddress ?: return@RecentsAdapter, txn.payeeName)
         }
     }
@@ -373,7 +386,7 @@ class HomeFragment : Fragment() {
     private fun loadFeed() {
         val payments = store.getTransactions().filter { it.type == "payment" }
         binding.emptyState.visibility = if (payments.isEmpty()) View.VISIBLE else View.GONE
-        val items = buildFeedItems(payments.take(MainActivity.MAX_FEED)).toMutableList()
+        val items = buildFeedItems(payments.take(MainActivity.MAX_FEED), payments).toMutableList()
         if (payments.size > MainActivity.MAX_FEED) items.add(FeedItem.ViewAll)
         binding.rvFeed.adapter = FeedAdapter(items, onViewAll = {
             startActivity(Intent(requireContext(), TransactionHistoryActivity::class.java))
@@ -387,17 +400,31 @@ class HomeFragment : Fragment() {
 
 // ---------- Feed adapter (day headers + rows, shared with the Transactions screen) ----------
 sealed class FeedItem {
-    data class Header(val label: String) : FeedItem()
+    data class Header(val label: String, val total: String?) : FeedItem()
     data class Row(val txn: Transaction) : FeedItem()
     object ViewAll : FeedItem()
 }
 
-internal fun buildFeedItems(txns: List<Transaction>): List<FeedItem> {
+internal fun buildFeedItems(
+    txns: List<Transaction>,
+    totalsFrom: List<Transaction> = txns,   // full history — capped/filtered
+                                            // lists would under-report the day
+): List<FeedItem> {
+    // per-day spend on the header — verified payments only, so failed and
+    // refunded attempts don't inflate the day
+    fun spentOn(day: String): String? {
+        val total = totalsFrom.filter {
+            MainActivity.dayLabel(it.timestamp) == day && it.status == "success"
+        }.sumOf { it.amount?.replace(",", "")?.toDoubleOrNull() ?: 0.0 }
+        if (total < 0.005) return null
+        val s = if (total % 1.0 < 0.005) "%.0f".format(total) else "%.2f".format(total)
+        return "₹" + formatIndianNumber(s)
+    }
     val items = mutableListOf<FeedItem>()
     var lastDay: String? = null
     for (t in txns) {
         val day = MainActivity.dayLabel(t.timestamp)
-        if (day != lastDay) { items.add(FeedItem.Header(day)); lastDay = day }
+        if (day != lastDay) { items.add(FeedItem.Header(day, spentOn(day))); lastDay = day }
         items.add(FeedItem.Row(t))
     }
     return items
@@ -426,7 +453,7 @@ internal class FeedAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = items[position]) {
-            is FeedItem.Header -> (holder as HeaderVH).bind(item.label)
+            is FeedItem.Header -> (holder as HeaderVH).bind(item)
             is FeedItem.Row -> (holder as RowVH).bind(item.txn, onClick)
             FeedItem.ViewAll -> holder.itemView.setOnClickListener { onViewAll?.invoke() }
         }
@@ -435,7 +462,12 @@ internal class FeedAdapter(
     override fun getItemCount() = items.size
 
     class HeaderVH(v: View) : RecyclerView.ViewHolder(v) {
-        fun bind(label: String) { (itemView as TextView).text = label }
+        private val day: TextView = v.findViewById(R.id.tvDayHeader)
+        private val total: TextView = v.findViewById(R.id.tvDayTotal)
+        fun bind(item: FeedItem.Header) {
+            day.text = item.label
+            total.text = item.total ?: ""
+        }
     }
 
     class ViewAllVH(v: View) : RecyclerView.ViewHolder(v)
@@ -452,10 +484,12 @@ internal class FeedAdapter(
             avatar.text = MainActivity.initials(t.payeeName, t.payeeAddress)
             avatar.setBackgroundResource(MainActivity.avatarBgFor(t.payeeAddress ?: t.id))
             val contactName = ContactsHelper.applyPhotoToAvatar(avatar, t.payeeAddress)
-            payee.text = t.storedName ?: contactName ?: MainActivity.displayName(t)
+            payee.text = com.offlineupi.app.data.PayeeMeta.label(ctx, t.payeeAddress)
+                ?: t.storedName ?: contactName ?: MainActivity.displayName(t)
             sub.text = MainActivity.timeLabel(t.timestamp)
 
-            amount.text = t.amount?.let { "− ₹${formatIndianNumber(it)}" } ?: "−"
+            // the feed is payments-only, so no minus sign — every row is money out
+            amount.text = t.amount?.let { "₹${formatIndianNumber(it)}" } ?: "—"
             amount.setTextColor(ctx.getColor(R.color.text_primary))
 
             val (label, bg, color) = when (t.status) {
@@ -487,25 +521,32 @@ internal class FeedAdapter(
 // ---------- Recents adapter ----------
 internal class RecentsAdapter(
     private val items: List<Transaction>,
+    private val onLongClick: (Transaction) -> Unit = {},
     private val onClick: (Transaction) -> Unit
 ) : RecyclerView.Adapter<RecentsAdapter.VH>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
         VH(LayoutInflater.from(parent.context).inflate(R.layout.item_recent, parent, false))
 
-    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(items[position], onClick)
+    override fun onBindViewHolder(holder: VH, position: Int) =
+        holder.bind(items[position], onClick, onLongClick)
     override fun getItemCount() = items.size
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         private val avatar: TextView = v.findViewById(R.id.tvRecentAvatar)
         private val name: TextView = v.findViewById(R.id.tvRecentName)
-        fun bind(t: Transaction, onClick: (Transaction) -> Unit) {
+        fun bind(t: Transaction, onClick: (Transaction) -> Unit, onLongClick: (Transaction) -> Unit) {
+            val ctx = itemView.context
             avatar.text = MainActivity.initials(t.payeeName, t.payeeAddress)
             avatar.setBackgroundResource(MainActivity.avatarBgFor(t.payeeAddress ?: t.id))
             val contactName = ContactsHelper.applyPhotoToAvatar(avatar, t.payeeAddress)
-            name.text = (t.storedName ?: contactName ?: MainActivity.displayName(t))
-                .substringBefore(" ").take(10)
+            // a user label wins whole; resolved names shorten to the first word
+            val label = com.offlineupi.app.data.PayeeMeta.label(ctx, t.payeeAddress)
+            name.text = label?.take(12)
+                ?: (t.storedName ?: contactName ?: MainActivity.displayName(t))
+                    .substringBefore(" ").take(10)
             itemView.setOnClickListener { onClick(t) }
+            itemView.setOnLongClickListener { onLongClick(t); true }
         }
     }
 }

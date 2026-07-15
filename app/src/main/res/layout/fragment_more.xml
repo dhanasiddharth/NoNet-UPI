@@ -33,6 +33,25 @@
 
             <TextView android:id="@+id/rowRecipients" android:foreground="@drawable/ripple_group" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Saved recipients" android:textColor="@color/text_primary" android:textSize="15.5sp" android:fontFamily="sans-serif-medium" android:background="@drawable/bg_detail_group" android:padding="18dp" android:layout_marginTop="8dp" />
 
+            <TextView android:id="@+id/rowPriceUpdates" android:foreground="@drawable/ripple_group" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Price updates" android:textColor="@color/text_primary" android:textSize="15.5sp" android:fontFamily="sans-serif-medium" android:background="@drawable/bg_detail_group" android:padding="18dp" android:layout_marginTop="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="APPEARANCE"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginTop="22dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="10dp" />
+            <LinearLayout
+                android:id="@+id/segAppearance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

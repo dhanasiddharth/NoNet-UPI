@@ -1,0 +1,4 @@
+<resources>
+    <!-- Dark configuration: light status/nav icons over the dark ground. -->
+    <bool name="light_system_bars">false</bool>
+</resources>

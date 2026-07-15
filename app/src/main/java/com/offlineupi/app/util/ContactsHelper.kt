@@ -30,10 +30,16 @@ object ContactsHelper {
     /** Clears the cache (e.g. after the permission is newly granted). */
     fun invalidate() = cache.clear()
 
+    /** getOrPut can't remember a null result — misses would re-query forever. */
+    private fun cached(key: String, query: () -> Entry?): Entry? {
+        if (cache.containsKey(key)) return cache[key]
+        return query().also { cache[key] = it }
+    }
+
     fun lookupPhone(context: Context, number: String?): Entry? {
         if (number.isNullOrBlank() || number.contains('@')) return null
         if (!hasPermission(context)) return null
-        return cache.getOrPut(number) {
+        return cached(number) {
             runCatching {
                 val uri = Uri.withAppendedPath(
                     ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
@@ -52,6 +58,43 @@ object ContactsHelper {
         }
     }
 
+    /**
+     * Contact lookup for a UPI ID: matches a contact whose Notes mention the
+     * VPA (the receipt's "add to contact" files it as "UPI ID: x") or whose
+     * email equals it (VPAs share the email format).
+     */
+    fun lookupVpa(context: Context, vpa: String?): Entry? {
+        if (vpa.isNullOrBlank() || !vpa.contains('@')) return null
+        if (!hasPermission(context)) return null
+        return cached("vpa:$vpa") {
+            runCatching {
+                context.contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(
+                        ContactsContract.Data.DISPLAY_NAME,
+                        ContactsContract.Data.PHOTO_URI
+                    ),
+                    "(${ContactsContract.Data.MIMETYPE}=? AND " +
+                        "${ContactsContract.CommonDataKinds.Note.NOTE} LIKE ?) OR " +
+                        "(${ContactsContract.Data.MIMETYPE}=? AND " +
+                        "${ContactsContract.CommonDataKinds.Email.ADDRESS}=?)",
+                    arrayOf(
+                        ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE, "%$vpa%",
+                        ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE, vpa
+                    ),
+                    null
+                )?.use { c ->
+                    if (c.moveToFirst()) Entry(c.getString(0), c.getString(1)) else null
+                }
+            }.getOrNull()
+        }
+    }
+
+    /** Route by address shape: phone → PhoneLookup, UPI ID → notes/email match. */
+    fun lookup(context: Context, address: String?): Entry? =
+        if (address?.contains('@') == true) lookupVpa(context, address)
+        else lookupPhone(context, address)
+
     private fun loadCircularPhoto(context: Context, photoUri: String, sizePx: Int): Drawable? =
         runCatching {
             context.contentResolver.openInputStream(Uri.parse(photoUri))?.use { ins ->
@@ -63,13 +106,14 @@ object ContactsHelper {
         }.getOrNull()
 
     /**
-     * If [address] is a phone number with a contact photo, replaces the
-     * initials avatar with the circular photo. Returns the contact name
-     * (or null) so callers can prefer it over stored names.
+     * If [address] resolves to a device contact (phone number, or a UPI ID
+     * found in a contact's notes/email) with a photo, replaces the initials
+     * avatar with the circular photo. Returns the contact name (or null) so
+     * callers can prefer it over stored names.
      */
     fun applyPhotoToAvatar(avatar: TextView, address: String?): String? {
         val ctx = avatar.context
-        val entry = lookupPhone(ctx, address) ?: return null
+        val entry = lookup(ctx, address) ?: return null
         entry.photoUri?.let { uri ->
             val size = if (avatar.width > 0) avatar.width
             else avatar.layoutParams?.width?.takeIf { it > 0 }

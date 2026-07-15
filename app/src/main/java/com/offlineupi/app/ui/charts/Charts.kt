@@ -63,9 +63,12 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
                       val widthDp: Float = 2.2f, val dashed: Boolean = false,
                       val area: Boolean = false)
 
-    /** A marker on series[0] — e.g. a trade. [label] (a short value) is drawn
-     *  only when few markers are in view, so a dense window stays readable. */
-    data class Dot(val idx: Int, val label: String? = null, val up: Boolean = true)
+    /** A marker on series[0] — e.g. a trade. [value] is the signed amount used
+     *  to combine nearby markers into one label; [label] is the pre-formatted
+     *  text for a lone marker (null = masked). Labels are drawn only when few
+     *  clusters are in view, so a dense window stays readable. */
+    data class Dot(val idx: Int, val value: Double = 0.0,
+                   val label: String? = null, val up: Boolean = true)
 
     var yFormatter: (Double) -> String = { "%.0f".format(it) }
     /** false (default): values ≤ 0 are "no data" gaps. true: only NaN is a gap. */
@@ -77,6 +80,13 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     /** Overrides x-axis labels; the raw longs in [set]'s dates are passed through
      *  (epoch days by default, epoch seconds for intraday). */
     var xLabelFormatter: ((Long) -> String)? = null
+    /** Formats a cluster's combined [Dot.value] sum; when set, adjacent markers
+     *  that would collide merge into one signed total (e.g. "+₹1.2L ×3"). */
+    var dotLabelFormatter: ((Double) -> String)? = null
+    /** When true, trade amounts are hidden until the user scrubs onto one — the
+     *  dots still draw, but the numbers appear only at the crosshair, keeping a
+     *  busy performance line clean. */
+    var scrubDotLabels = false
 
     private var series: List<Series> = emptyList()
     private var dates: LongArray = LongArray(0)
@@ -88,20 +98,29 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     private var scrubIdx = -1
     private var panAccum = 0f
 
-    private val gridPaint = Paint().apply { color = 0xFF1B2420.toInt(); strokeWidth = dp(1f) }
-    private val zeroPaint = Paint().apply { color = 0xFF33403A.toInt(); strokeWidth = dp(1f) }
-    private val hairPaint = Paint().apply { color = 0xFF4A5A52.toInt(); strokeWidth = dp(1.1f) }
+    // structural colors resolve from resources so they follow light/dark
+    private val surfaceColor = ContextCompat.getColor(context, R.color.bg_dark)
+    private val buyColor = ContextCompat.getColor(context, R.color.accent_green)
+    private val sellColor = ContextCompat.getColor(context, R.color.accent_red)
+    private val gridPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.chart_grid); strokeWidth = dp(1f) }
+    private val zeroPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.chart_zero); strokeWidth = dp(1f) }
+    private val hairPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.chart_hair); strokeWidth = dp(1.1f) }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.text_secondary); textSize = dp(9.5f)
+        // brighter + larger than a bare axis: these numbers are read, not decor
+        color = ContextCompat.getColor(context, R.color.text_secondary_light); textSize = dp(10.5f)
     }
     private val labelText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.text_primary)
-        textSize = dp(11f); isFakeBoldText = true
+        textSize = dp(11.5f); isFakeBoldText = true
     }
     private val markerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = dp(9.5f); isFakeBoldText = true
+        textSize = dp(10f); isFakeBoldText = true
     }
-    private val labelBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF5192420.toInt() }
+    private val labelBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.chart_label_bg) }
     private val labelStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = dp(1f)
         color = ContextCompat.getColor(context, R.color.card_stroke)
@@ -221,21 +240,39 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             }
         }
 
-        // trade markers ride series[0]; label them only when few are in view
-        val inWindow = dots.filter { it.idx in winStart until winEnd && !disp(0, it.idx, bases[0]).isNaN() }
-        val showLabels = inWindow.count { it.label != null } in 1..8
-        for (d in inWindow) {
-            val v = disp(0, d.idx, bases[0])
-            val cx = x(d.idx); val cy = y(v)
-            dotPaint.color = 0xFF0A0F0D.toInt()
-            canvas.drawCircle(cx, cy, dp(4.2f), dotPaint)
-            dotPaint.color = if (d.up) 0xFF34D88F.toInt() else 0xFFF26A5B.toInt()
-            canvas.drawCircle(cx, cy, dp(2.8f), dotPaint)
-            if (showLabels && d.label != null) {
-                markerText.color = dotPaint.color
-                val tw = markerText.measureText(d.label)
-                val tx = (cx - tw / 2).coerceIn(0f, plotW() - tw)
-                canvas.drawText(d.label, tx, (cy - dp(7f)).coerceAtLeast(dp(9f)), markerText)
+        // trade markers ride series[0]. Every trade keeps its own dot, but the
+        // labels — which overlap when trades bunch up — collapse: markers whose
+        // dots sit within ~a label's width of each other merge into one combined
+        // signed total (e.g. "+₹1.2L ×3"), so no two numbers ever overlap.
+        val buyC = buyColor; val sellC = sellColor
+        val inWindow = dots
+            .filter { it.idx in winStart until winEnd && !disp(0, it.idx, bases[0]).isNaN() }
+            .map { d -> Triple(x(d.idx), y(disp(0, d.idx, bases[0])), d) }
+            .sortedBy { it.first }
+        for ((cx, cy, d) in inWindow) {
+            dotPaint.color = surfaceColor; canvas.drawCircle(cx, cy, dp(4.2f), dotPaint)
+            dotPaint.color = if (d.up) buyC else sellC; canvas.drawCircle(cx, cy, dp(2.8f), dotPaint)
+        }
+        // greedily group by x-proximity, then draw one label per group
+        val clusters = mutableListOf<MutableList<Triple<Float, Float, Dot>>>()
+        val mergeGap = dp(38f)
+        for (m in inWindow) {
+            val c = clusters.lastOrNull()
+            if (c != null && m.first - c.last().first <= mergeGap) c.add(m) else clusters.add(mutableListOf(m))
+        }
+        if (!scrubDotLabels && clusters.size in 1..8) {
+            var cursor = 0f
+            for (c in clusters) {
+                if (c.none { it.third.label != null }) continue   // masked → no number
+                val sum = c.sumOf { it.third.value }
+                val cx = c.map { it.first }.average().toFloat()
+                val cy = c.minOf { it.second }
+                val base = dotLabelFormatter?.invoke(sum) ?: c.first().third.label ?: continue
+                val txt = if (c.size > 1) "$base ×${c.size}" else base
+                val tw = markerText.measureText(txt)
+                val tx = (cx - tw / 2).coerceAtLeast(cursor).coerceIn(0f, plotW() - tw)
+                pillLabel(canvas, txt, tx, (cy - dp(8f)).coerceAtLeast(dp(11f)), if (sum >= 0) buyC else sellC)
+                cursor = tx + tw + dp(10f)
             }
         }
 
@@ -258,7 +295,7 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
             if (!v.isNaN()) {
                 val cx = x(scrubIdx)
                 canvas.drawLine(cx, padT, cx, padT + h, hairPaint)
-                dotPaint.color = 0xFF0A0F0D.toInt()
+                dotPaint.color = surfaceColor
                 canvas.drawCircle(cx, y(v), dp(5f), dotPaint)
                 dotPaint.color = series[0].color
                 canvas.drawCircle(cx, y(v), dp(3.2f), dotPaint)
@@ -271,8 +308,42 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
                 canvas.drawRoundRect(bx, 0f, bx + bw, bh, dp(6f), dp(6f), labelStroke)
                 labelText.textAlign = Paint.Align.CENTER
                 canvas.drawText(txt, bx + bw / 2, bh - dp(7f), labelText)
+
+                // when labels are scrub-gated, reveal a trade's amount only when
+                // the crosshair lands on (or beside) it
+                if (scrubDotLabels) {
+                    val near = dots.filter {
+                        it.idx in winStart until winEnd &&
+                            !disp(0, it.idx, bases[0]).isNaN() &&
+                            kotlin.math.abs(x(it.idx) - cx) <= dp(16f)
+                    }
+                    if (near.any { it.label != null }) {
+                        val sum = near.sumOf { it.value }
+                        val base = dotLabelFormatter?.invoke(sum)
+                            ?: near.first { it.label != null }.label ?: ""
+                        val tt = if (near.size > 1) "$base ×${near.size}" else base
+                        val tw2 = markerText.measureText(tt)
+                        val tx2 = (cx - tw2 / 2).coerceIn(0f, plotW() - tw2)
+                        val ty2 = (y(v) - dp(11f)).coerceAtLeast(bh + dp(14f))
+                        pillLabel(canvas, tt, tx2, ty2, if (sum >= 0) buyColor else sellColor)
+                    }
+                }
             }
         }
+    }
+
+    /** A marker value on a rounded dark backing so digits stay legible over the
+     *  line/area. [left] is the text's left edge, [baseline] its text baseline. */
+    private fun pillLabel(canvas: Canvas, txt: String, left: Float, baseline: Float, color: Int) {
+        val tw = markerText.measureText(txt)
+        val fm = markerText.fontMetrics
+        canvas.drawRoundRect(
+            left - dp(4f), baseline + fm.ascent - dp(2f),
+            left + tw + dp(4f), baseline + fm.descent + dp(1f),
+            dp(4f), dp(4f), labelBg
+        )
+        markerText.color = color
+        canvas.drawText(txt, left, baseline, markerText)
     }
 
     // ---- gestures: tap = crosshair; drag pans the window (or scrubs when zoomed out) ----
@@ -336,6 +407,60 @@ class LineChartView(context: Context, attrs: AttributeSet? = null) : View(contex
     override fun performClick(): Boolean = super.performClick()
 }
 
+/** 52-week range — a quiet low—high track with the current price marked on
+ *  it. The classic value-investing element: where does today sit in the year? */
+class RangeBarView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+
+    private var lo = 0.0; private var hi = 0.0; private var cur = 0.0
+    private var fmt: (Double) -> String = { "%.0f".format(it) }
+    private var accent = 0xFF34D88F.toInt()
+
+    private val surfaceColor = ContextCompat.getColor(context, R.color.bg_dark)
+    private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.chart_grid)
+        strokeWidth = dp(4f); strokeCap = Paint.Cap.ROUND
+    }
+    private val markPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val curText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.text_primary)
+        textSize = dp(11.5f); isFakeBoldText = true; textAlign = Paint.Align.CENTER
+    }
+    private val endText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.text_secondary); textSize = dp(10f)
+    }
+
+    fun set(low: Double, high: Double, current: Double, color: Int, fmt: (Double) -> String) {
+        lo = low; hi = high; cur = current; accent = color; this.fmt = fmt
+        invalidate()
+    }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        setMeasuredDimension(MeasureSpec.getSize(widthSpec), dp(58f).toInt())
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (hi <= lo) return
+        val pad = dp(6f)
+        val y = height / 2f + dp(5f)
+        canvas.drawLine(pad, y, width - pad, y, trackPaint)
+        val f = ((cur - lo) / (hi - lo)).coerceIn(0.0, 1.0).toFloat()
+        val cx = pad + (width - 2 * pad) * f
+        markPaint.color = surfaceColor
+        canvas.drawCircle(cx, y, dp(6.5f), markPaint)
+        markPaint.color = accent
+        canvas.drawCircle(cx, y, dp(4.5f), markPaint)
+        // current price rides above the marker, clamped inside the view
+        val curTxt = fmt(cur)
+        val half = curText.measureText(curTxt) / 2
+        canvas.drawText(curTxt, cx.coerceIn(pad + half, width - pad - half), y - dp(13f), curText)
+        // extremes underneath the ends
+        endText.textAlign = Paint.Align.LEFT
+        canvas.drawText("52W low ${fmt(lo)}", pad, y + dp(20f), endText)
+        endText.textAlign = Paint.Align.RIGHT
+        canvas.drawText("52W high ${fmt(hi)}", width - pad, y + dp(20f), endText)
+    }
+}
+
 /** You / index / inflation on one shared XIRR axis — one row per bucket. */
 class DotPlotView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
@@ -346,15 +471,19 @@ class DotPlotView(context: Context, attrs: AttributeSet? = null) : View(context,
     private var rows: List<Row> = emptyList()
     private val rowH = dp(46f)
 
-    private val axisPaint = Paint().apply { color = 0xFF1B2420.toInt(); strokeWidth = dp(2f) }
-    private val zeroPaint = Paint().apply { color = 0xFF33403A.toInt(); strokeWidth = dp(1f) }
-    private val sepPaint = Paint().apply { color = 0xFF24302A.toInt(); strokeWidth = dp(1f) }
+    private val axisPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.chart_grid); strokeWidth = dp(2f) }
+    private val zeroPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.chart_zero); strokeWidth = dp(1f) }
+    private val sepPaint = Paint().apply {
+        color = ContextCompat.getColor(context, R.color.card_stroke); strokeWidth = dp(1f) }
     private val inflPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.accent_amber); strokeWidth = dp(2.5f)
         strokeCap = Paint.Cap.ROUND
     }
     private val idxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = dp(2f); color = 0xFF7A8A82.toInt()
+        style = Paint.Style.STROKE; strokeWidth = dp(2f)
+        color = ContextCompat.getColor(context, R.color.chart_muted)
     }
     private val idxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.card_bg)

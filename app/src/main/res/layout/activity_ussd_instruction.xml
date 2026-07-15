@@ -155,6 +155,40 @@
             android:layout_marginTop="10dp"
             android:visibility="gone" />
 
+        <!-- Result block — the verification outcome reads before the location
+             picker below: did the money go through, then where were you -->
+        <LinearLayout
+            android:id="@+id/layoutResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="16dp">
+
+            <View
+                android:id="@+id/dividerResult"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/divider" />
+
+            <TextView
+                android:id="@+id/tvResult"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:layout_marginTop="14dp" />
+
+            <TextView
+                android:id="@+id/tvResultDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
         <!-- Location tag: reverse-geocoded place picker (populated at runtime) -->
         <LinearLayout
             android:id="@+id/layoutLocation"
@@ -190,39 +224,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="6dp" />
-        </LinearLayout>
-
-        <!-- Result block -->
-        <LinearLayout
-            android:id="@+id/layoutResult"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginTop="16dp">
-
-            <View
-                android:id="@+id/dividerResult"
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/divider" />
-
-            <TextView
-                android:id="@+id/tvResult"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="17sp"
-                android:textStyle="bold"
-                android:layout_marginTop="14dp" />
-
-            <TextView
-                android:id="@+id/tvResultDetails"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                android:textSize="12.5sp"
-                android:lineSpacingExtra="2dp"
                 android:layout_marginTop="6dp" />
         </LinearLayout>
 

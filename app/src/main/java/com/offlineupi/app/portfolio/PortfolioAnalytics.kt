@@ -16,6 +16,15 @@ object PortfolioAnalytics {
 
     const val OZ_TO_GRAM = 31.1035
 
+    /** Assumed India slab for the "after tax" line — a planning number, not a
+     *  filing computation. */
+    const val TAX_RATE = 0.30
+
+    /** What the money is worth after paying tax on gains: the principal was
+     *  bought with post-tax money, so only growth above net contributions is
+     *  taxed; a losing position offsets other income, so it adds back. */
+    fun afterTax(value: Double, invested: Double) = value - TAX_RATE * (value - invested)
+
     enum class Bucket(val label: String, val currency: String, val benchSymbol: String,
                       val benchName: String, val cpi: String) {
         India("India", "INR", "^NSEI", "Nifty 50", "IN"),
@@ -413,8 +422,6 @@ object PortfolioAnalytics {
         val qty: Double, val priceNow: Double, val valueNow: Double, val investedNow: Double,
         val dayPct: Double,
         val xirr: Double?, val benchXirr: Double?, val inflXirr: Double?,
-        /** label → (holding price return, index price return) over trailing window */
-        val trailing: List<Triple<String, Double?, Double?>>,
     )
 
     fun holdingDetail(db: PortfolioDb, isin: String): HoldingDetail? {
@@ -430,7 +437,11 @@ object PortfolioAnalytics {
         val rawBy = group.associate { it.isin to db.priceSeries(it.yahoo) }
         val bench = db.priceSeries(b.benchSymbol)
         val fxRaw = db.priceSeries("USDINR=X")
-        val start = trades.first().day
+        // the calendar starts at the earliest stored close, not the first buy —
+        // Performance should show the security's history before you owned it
+        val firstTradeDay = trades.first().day
+        val start = minOf(firstTradeDay,
+            rawBy.values.mapNotNull { it.firstOrNull()?.first }.minOrNull() ?: firstTradeDay)
         val end = rawBy.values.mapNotNull { it.lastOrNull()?.first }.maxOrNull() ?: return null
         if (end <= start) return null
         val n = (end - start + 1).toInt()
@@ -477,7 +488,12 @@ object PortfolioAnalytics {
         for (arr in qtyBy.values + listOf(invested, benchUnits))
             for (k in 1 until n) arr[k] += arr[k - 1]
 
+        // before the first trade the position doesn't exist — NaN, not 0, so
+        // the Value chart starts where ownership does (every consumer already
+        // filters NaN/<=0)
+        val firstK = (firstTradeDay - start).toInt()
         val value = DoubleArray(n) { k ->
+            if (k < firstK) return@DoubleArray Double.NaN
             var v = 0.0
             var missing = false
             for (g in group) {
@@ -528,17 +544,6 @@ object PortfolioAnalytics {
         val prev = if (prevIdx > 0) px[prevIdx - 1] else Double.NaN
         val dayPct = if (!px[last].isNaN() && !prev.isNaN() && prev > 0) (px[last] / prev - 1) * 100 else 0.0
 
-        val trailing = listOf("1M" to 30, "3M" to 91, "6M" to 182, "1Y" to 365, "3Y" to 1095)
-            .map { (label, back) ->
-                val k0 = last - back
-                if (k0 < 0) Triple(label, null, null)
-                else Triple(
-                    label,
-                    if (!px[k0].isNaN() && px[k0] > 0) px[last] / px[k0] - 1 else null,
-                    if (!bx[k0].isNaN() && bx[k0] > 0) bx[last] / bx[k0] - 1 else null,
-                )
-            }
-
         return HoldingDetail(
             instrument = inst.copy(name = mergedName(group)),
             bucket = b, sector = SECTORS[inst.yahoo] ?: inst.type,
@@ -550,8 +555,32 @@ object PortfolioAnalytics {
             dayPct = dayPct,
             xirr = xirr(valueNow), benchXirr = xirr(benchValue[last].orZero()),
             inflXirr = xirr(inflTerminal),
-            trailing = trailing,
         )
+    }
+
+    /**
+     * Money-weighted (XIRR) return of a visible window [s, e]: the position's
+     * worth at the window start counts as the opening stake, trades inside move
+     * cash, and the worth at the end closes it out. Annualised, so windows
+     * shorter than ~4 weeks return null — extrapolating days is noise.
+     */
+    fun windowXirr(d: HoldingDetail, s: Int, e: Int): Double? {
+        val sIdx = (s..e).firstOrNull { !d.value[it].isNaN() && d.value[it] > 0 } ?: return null
+        val eIdx = (e downTo sIdx).firstOrNull { !d.value[it].isNaN() && d.value[it] > 0 } ?: return null
+        if (eIdx - sIdx < 28) return null
+        // the opening stake already contains any trade dated sIdx (qty applies
+        // that same day), so only strictly-later trades are separate flows
+        val flows = mutableListOf(sIdx to d.value[sIdx])
+        for (t in d.trades) {
+            // same coercion holdingDetail applies — a trade dated after the
+            // last stored close (weekend buy) still lands on the final day
+            val k = (t.day - d.days[0]).toInt().coerceIn(0, d.days.size - 1)
+            if (k in (sIdx + 1)..eIdx) {
+                val sign = if (t.side == "buy") 1.0 else -1.0
+                flows.add(k to sign * (t.qty * t.price + t.fee))
+            }
+        }
+        return xirrOf(flows, d.value[eIdx], eIdx)
     }
 
     // ---------- price movement over an arbitrary window ----------

@@ -179,9 +179,17 @@ class TransactionReceiptActivity : AppCompatActivity() {
             binding.dividerAccount.visibility = View.GONE
         }
 
-        // Hero name — captured name, else the address as the title
-        binding.tvPayeeName.text =
-            txn.storedName ?: contactName ?: (txn.payeeAddress ?: "Payment")
+        // Hero name — user label first, then captured name, else the address
+        binding.tvPayeeName.text = com.offlineupi.app.data.PayeeMeta.label(this, txn.payeeAddress)
+            ?: txn.storedName ?: contactName ?: (txn.payeeAddress ?: "Payment")
+
+        // Label & favourite editor for this payment target
+        binding.btnLabel.visibility =
+            if (txn.payeeAddress != null) View.VISIBLE else View.GONE
+        binding.btnLabel.setOnClickListener {
+            PayeeEdit.show(this, txn.payeeAddress ?: return@setOnClickListener,
+                txn.storedName ?: contactName) { displayTransaction() }
+        }
         binding.tvPayee.text = txn.payeeAddress ?: "-"
         txn.payeeAddress?.let { addr ->
             binding.tvPayee.setOnClickListener {
@@ -191,19 +199,6 @@ class TransactionReceiptActivity : AppCompatActivity() {
 
         // Date & Time — IST, am/pm (see util/TimeFmt)
         binding.tvDateTime.text = TimeFmt.dateTime(txn.timestamp)
-
-        // Location tag captured at pay time
-        val placeText = txn.placeName
-            ?: txn.latitude?.let { lat -> txn.longitude?.let { lng -> "%.5f, %.5f".format(lat, lng) } }
-        if (placeText != null) {
-            binding.layoutLocation.visibility = View.VISIBLE
-            binding.tvLocation.text = placeText
-            val acc = txn.locationAccuracy
-            binding.tvLocationAccuracy.visibility = if (acc != null) View.VISIBLE else View.GONE
-            if (acc != null) binding.tvLocationAccuracy.text = "±${acc.toInt()} m accuracy"
-        } else {
-            binding.layoutLocation.visibility = View.GONE
-        }
 
         // Remarks
         if (!txn.remarks.isNullOrBlank()) {

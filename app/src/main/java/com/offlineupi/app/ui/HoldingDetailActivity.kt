@@ -5,6 +5,7 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -40,6 +41,9 @@ class HoldingDetailActivity : AppCompatActivity() {
     private val db by lazy { PortfolioDb(this) }
 
     private var detail: HoldingDetail? = null
+    private var fund: com.offlineupi.app.portfolio.Fundamentals? = null
+    /** Freshest unit price from the intraday pull; falls back to the daily close. */
+    private var livePrice: Double? = null
     private var range = "1Y"
     private val ranges = listOf("1D", "1W", "1M", "3M", "6M", "1Y", "3Y", "5Y", "All")
     private val chartModes = listOf("Performance", "Value")
@@ -64,6 +68,9 @@ class HoldingDetailActivity : AppCompatActivity() {
             val d = withContext(Dispatchers.IO) { PortfolioAnalytics.holdingDetail(db, isin) }
             if (d == null) { finish(); return@launch }
             detail = d
+            // cached fundamentals paint with the first frame; refresh comes later
+            val cachedF = withContext(Dispatchers.IO) { db.fundamentals(d.instrument.yahoo) }
+            fund = cachedF?.let { com.offlineupi.app.portfolio.Fundamentals.parse(it.first, it.second) }
             render(d)
             // daily bars can't draw a real 1D — pull ~48h of 15m bars in the
             // background and re-render if the user is (or lands) on 1D
@@ -72,7 +79,37 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             if (bars != null && bars.size >= 2) {
                 intraday = bars
+                // freshest price flows into the value hero, the qty chip and
+                // the 52W marker (the hero stays the position's total worth)
+                livePrice = bars.last().second
+                // persist it as today's close so the overview & position value
+                // reflect the current price too. GOLD's intraday is converted
+                // (₹/g) while the price table holds raw Yahoo ($/oz) — skip it.
+                if (d.instrument.isin != "GOLD") withContext(Dispatchers.IO) {
+                    db.upsertPrices(d.instrument.yahoo, listOf(bars.last().first / 86_400L to bars.last().second))
+                }
+                renderHeader(d)
+                renderFundamentals(d)
                 if (range == "1D") renderChart(d)
+            }
+            // fundamentals older than a day refresh quietly (GOLD has none —
+            // its Yahoo quote is $/oz while the page runs on ₹/g). Age is the
+            // only gate: sniffing the JSON for a module doesn't work, funds
+            // legitimately never have financialData.
+            if (d.instrument.isin != "GOLD" &&
+                (cachedF == null || System.currentTimeMillis() - cachedF.second > 24 * 3_600_000L)
+            ) {
+                val fresh = withContext(Dispatchers.IO) {
+                    runCatching {
+                        com.offlineupi.app.portfolio.PortfolioSync(this@HoldingDetailActivity, db)
+                            .fetchFundamentals(d.instrument.yahoo)
+                            ?.also { db.setFundamentals(d.instrument.yahoo, it) }
+                    }.getOrNull()
+                }
+                if (fresh != null) {
+                    fund = com.offlineupi.app.portfolio.Fundamentals.parse(fresh, System.currentTimeMillis())
+                    renderFundamentals(d)
+                }
             }
         }
     }
@@ -88,21 +125,44 @@ class HoldingDetailActivity : AppCompatActivity() {
     private val color get() = PortfolioUi.bucketColors.getValue(detail!!.bucket)
     private val ccy get() = detail!!.instrument.currency
 
+    private fun curPrice(d: HoldingDetail) = livePrice ?: d.priceNow
+
+    /** Position worth: valueNow covers every share class (GOOG+GOOGL merge);
+     *  a live tick scales it by the primary class's move — exact for single-
+     *  class holdings, proportional for merged ones. */
+    private fun curWorth(d: HoldingDetail): Double =
+        if (livePrice != null && d.priceNow > 0) d.valueNow * (livePrice!! / d.priceNow)
+        else d.valueNow
+
+    /** Hero = position's total worth, unit price + qty quiet on its right;
+     *  XIRR leads the chip row — the page's headline return is money-weighted,
+     *  not the raw price move. */
+    @SuppressLint("SetTextI18n")
+    private fun renderHeader(d: HoldingDetail) {
+        val worth = curWorth(d)
+        binding.tvPrice.text = MoneyFmt.money(worth, ccy)
+        binding.tvAfterTax.text = "≈ ${MoneyFmt.money(
+            PortfolioAnalytics.afterTax(worth, d.investedNow), ccy)} after tax"
+        chip(binding.tvXirrChip, d.xirr?.let { it >= 0 },
+            d.xirr?.let { "XIRR ${MoneyFmt.pct(it)}/yr" } ?: "XIRR —")
+        binding.tvUnitPrice.text = MoneyFmt.price(curPrice(d), ccy)
+        val qtyTxt = if (d.qty == Math.floor(d.qty) && d.qty < 1e6) "%.0f".format(d.qty)
+            else "%.4f".format(d.qty).trimEnd('0').trimEnd('.')
+        binding.tvQty.text = "$qtyTxt " + if (d.instrument.isin == "GOLD") "grams" else "units"
+    }
+
     @SuppressLint("SetTextI18n")
     private fun render(d: HoldingDetail) {
         binding.tvName.text = d.instrument.name
         binding.tvSub.text = "${d.sector} · ${d.bucket.label} · vs ${d.bucket.benchName}"
-        // hero is the position's worth (mockup layout); unit price lives in the qty chip
-        binding.tvPrice.text = MoneyFmt.money(d.valueNow, ccy)
-        val qtyTxt = if (d.qty == Math.floor(d.qty) && d.qty < 1e6) "%.0f".format(d.qty)
-            else "%.4f".format(d.qty).trimEnd('0').trimEnd('.')
-        val unit = if (d.instrument.isin == "GOLD") "g" else "u"
-        binding.tvQtyChip.text = "$qtyTxt $unit · ${MoneyFmt.price(d.priceNow, ccy)}"
+        binding.tvPerBenchCap.text = "VS ${d.bucket.benchName.uppercase()}"
+        renderHeader(d)
 
         renderRanges()
         renderChartModes()
         renderChart(d)
         renderReturns(d)
+        renderFundamentals(d)
         renderStats(d)
         renderTrades(d)
     }
@@ -160,28 +220,60 @@ class HoldingDetailActivity : AppCompatActivity() {
             move?.let { if (abs(it) < 0.05) null else it > 0 },
             "${move?.let { MoneyFmt.signedPct(it) } ?: "—"} · $label")
 
-        if (chartMode == "Performance") {
-            val gap = (move ?: 0.0) - (spanPct(d.bench) ?: 0.0)
-            binding.tvChartStat.text = "${if (gap >= 0) "+" else ""}%.1f pts".format(gap)
-            binding.tvChartStat.setTextColor(getColor(
-                if (gap >= 0) R.color.accent_green else R.color.accent_red))
-        } else {
-            val vEnd = (e downTo s).firstOrNull { !d.value[it].isNaN() }?.let { d.value[it] }
-            binding.tvChartStat.text = MoneyFmt.money(vEnd ?: d.valueNow, ccy)
-            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
-        }
+        // period breakdown: money added, then the true gain — worth now minus
+        // (worth at the window start + money put in during it), so deposits
+        // don't masquerade as gains — and the window's money-weighted XIRR.
+        // The raw price move already lives in the chip above.
+        val invested = d.invested[e] - d.invested[s]
+        // the gain's invested-delta anchors at the first OWNED day, not the
+        // window start — the opening value already contains that day's buy,
+        // so counting it again would double-subtract (windows can now begin
+        // before the position existed)
+        val sIdx = (s..e).firstOrNull { !d.value[it].isNaN() && d.value[it] > 0 }
+        val vS = sIdx?.let { d.value[it] }
+        val vE = (e downTo s).firstOrNull { !d.value[it].isNaN() && d.value[it] > 0 }?.let { d.value[it] }
+        val gain = if (sIdx != null && vS != null && vE != null)
+            (vE - vS) - (d.invested[e] - d.invested[sIdx]) else null
+        val bench = spanPct(d.bench)
+        val gap = if (move != null && bench != null) move - bench else null
+        setPeriod(invested, gain, PortfolioAnalytics.windowXirr(d, s, e), gap)
     }
 
+    /** The four window stats in the strip under the chart. null → "—";
+     *  gain/XIRR/gap get a green/red tone, invested stays neutral (adding
+     *  money isn't good or bad). [xirr] is a fraction/yr — null for windows
+     *  too short to annualise; [benchGap] is percentage points vs the index. */
+    @SuppressLint("SetTextI18n")
+    private fun setPeriod(investedDelta: Double?, gain: Double?, xirr: Double?, benchGap: Double?) {
+        fun signedMoney(v: Double) = (if (v >= 0) "+" else "−") + MoneyFmt.money(abs(v), ccy)
+        fun tone(tv: TextView, v: Double?, dead: Double) = tv.setTextColor(getColor(when {
+            v == null || abs(v) < dead -> R.color.text_primary
+            v > 0 -> R.color.accent_green
+            else -> R.color.accent_red
+        }))
+        binding.tvPerInvested.text = investedDelta?.let {
+            if (abs(it) < 1.0) "—" else signedMoney(it)
+        } ?: "—"
+        binding.tvPerChange.text = gain?.let { signedMoney(it) } ?: "—"
+        tone(binding.tvPerChange, gain, 1e-6)
+        binding.tvPerReturn.text = xirr?.let { MoneyFmt.pct(it) } ?: "—"
+        tone(binding.tvPerReturn, xirr, 0.0005)
+        binding.tvPerBench.text = benchGap?.let {
+            "${if (it >= 0) "+" else ""}%.1f pts".format(it) } ?: "—"
+        tone(binding.tvPerBench, benchGap, 0.05)
+    }
+
+    /** Compact Perf/Value lens toggle, living in the legend row it controls. */
     private fun renderChartModes() {
         val wrap = binding.layoutChartModes
         wrap.removeAllViews()
         for (m in chartModes) {
             val tv = TextView(this).apply {
-                text = m
-                textSize = 12f
+                text = if (m == "Performance") "Perf" else m
+                textSize = 10.5f
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 gravity = Gravity.CENTER
-                setPadding(0, dp(5), 0, dp(5))
+                setPadding(dp(10), dp(3), dp(10), dp(3))
                 setBackgroundResource(if (m == chartMode) R.drawable.bg_pill_selected else R.drawable.bg_input_pill)
                 setTextColor(getColor(if (m == chartMode) R.color.accent_emerald_light else R.color.text_secondary))
                 setOnClickListener {
@@ -190,8 +282,9 @@ class HoldingDetailActivity : AppCompatActivity() {
                     detail?.let { d -> renderChartModes(); renderChart(d) }
                 }
             }
-            wrap.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { if (m != chartModes.last()) marginEnd = dp(6) })
+            wrap.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { if (m != chartModes.last()) marginEnd = dp(4) })
         }
     }
 
@@ -212,8 +305,13 @@ class HoldingDetailActivity : AppCompatActivity() {
         val dots = d.tradeDots.map { td ->
             val buy = td.trade.side == "buy"
             val cash = td.trade.qty * td.trade.price + td.trade.fee
-            LineChartView.Dot(td.idx, (if (buy) "+" else "−") + MoneyFmt.money(cash, ccy), up = buy)
+            LineChartView.Dot(td.idx, value = if (buy) cash else -cash,
+                label = (if (buy) "+" else "−") + MoneyFmt.money(cash, ccy), up = buy)
         }
+        binding.chart.dotLabelFormatter =
+            { v -> (if (v >= 0) "+" else "−") + MoneyFmt.money(abs(v), ccy) }
+        // the performance line gets busy — hide trade amounts until scrubbed onto
+        binding.chart.scrubDotLabels = chartMode == "Performance"
 
         if (chartMode == "Performance") {
             // cumulative price % over full history; the chart re-anchors 0% to
@@ -241,7 +339,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             binding.chart.set(listOf(
                 LineChartView.Series(you, color, area = true),
-                LineChartView.Series(bench, PortfolioUi.MUTED_LINE, widthDp = 1.8f),
+                LineChartView.Series(bench, getColor(R.color.chart_muted), widthDp = 1.8f),
             ), d.days, dots, win, rebase = true)
             binding.tvChartLegend.text = "— price   — ${d.bucket.benchName}   ● trades"
         } else {
@@ -255,7 +353,7 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             binding.chart.set(listOf(
                 LineChartView.Series(d.value, color, area = true),
-                LineChartView.Series(d.invested, PortfolioUi.MUTED_LINE, widthDp = 1.4f, dashed = true),
+                LineChartView.Series(d.invested, getColor(R.color.chart_muted), widthDp = 1.4f, dashed = true),
             ), d.days, dots, win, rebase = false)
             binding.tvChartLegend.text = "— value   ┈ invested   ● trades"
         }
@@ -287,9 +385,6 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             binding.chart.set(listOf(LineChartView.Series(pct, color, area = true)), secs)
             binding.tvChartLegend.text = "— price · 15m bars · last 48h"
-            binding.tvChartStat.text = MoneyFmt.signedPct(movePct)
-            binding.tvChartStat.setTextColor(getColor(
-                if (movePct >= 0) R.color.accent_green else R.color.accent_red))
         } else {
             val vals = DoubleArray(px.size) { if (px[it] > 0) d.qty * px[it] else Double.NaN }
             binding.chart.allowNegative = false
@@ -299,69 +394,77 @@ class HoldingDetailActivity : AppCompatActivity() {
             }
             binding.chart.set(listOf(LineChartView.Series(vals, color, area = true)), secs)
             binding.tvChartLegend.text = "— value · 15m bars · last 48h"
-            binding.tvChartStat.text = MoneyFmt.money(d.qty * last, ccy)
-            binding.tvChartStat.setTextColor(getColor(R.color.text_primary))
         }
         chip(binding.tvDayChip, if (abs(movePct) < 0.05) null else movePct > 0,
             "${MoneyFmt.signedPct(movePct)} · 48h")
+        // no trade data or benchmark in the intraday feed, and annualising 48h
+        // is noise — only the gain stat carries a number here
+        setPeriod(null, d.qty * (last - first), null, null)
     }
 
-    /** Rolling price-return chips (3M / 1Y / 3Y annualised) — mockup layout. */
+    /** RETURNS owns every %/yr number: the trailing money-weighted line
+     *  (what YOUR cash in this position earned per year over each window,
+     *  contribution-aware, ending with since-inception) as plain text — the
+     *  pill look read as buttons — plus the lifetime edge vs the bucket's
+     *  index and inflation. */
     @SuppressLint("SetTextI18n")
     private fun renderReturns(d: HoldingDetail) {
-        val wrap = binding.layoutReturns
+        val wrap = binding.layoutXirrLine
         wrap.removeAllViews()
-        val wanted = listOf("3M", "1Y", "3Y")
-        for (label in wanted) {
-            val t = d.trailing.firstOrNull { it.first == label } ?: continue
-            val you = t.second
-            val annualised = if (label == "3Y" && you != null)
-                Math.pow(1 + you, 1.0 / 3) - 1 else you
-            val txt = "$label ${MoneyFmt.pct(annualised)}" + if (label == "3Y" && you != null) "/yr" else ""
+        val n = d.days.size
+        val firstTradeDay = d.trades.first().day
+        val entries = listOf("1Y" to 365, "3Y" to 1095, "5Y" to 1826)
+            .mapNotNull { (label, back) ->
+                val s = n - 1 - back
+                // a window that opens before the first buy is just "All" again —
+                // only show windows the position fully spans
+                if (s < 0 || d.days[s] < firstTradeDay) null
+                else label to PortfolioAnalytics.windowXirr(d, s, n - 1)
+            } + ("All" to d.xirr)
+        for ((label, r) in entries) {
             wrap.addView(TextView(this).apply {
-                text = txt
+                text = label
+                textSize = 12f
+                setTextColor(getColor(R.color.text_secondary))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(5) })
+            wrap.addView(TextView(this).apply {
+                text = MoneyFmt.pct(r)
                 textSize = 12f
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                setPadding(dp(10), dp(4), dp(10), dp(4))
                 setTextColor(getColor(when {
-                    annualised == null -> R.color.text_secondary
-                    annualised >= 0 -> R.color.accent_green
+                    r == null -> R.color.text_secondary
+                    r >= 0 -> R.color.accent_green
                     else -> R.color.accent_red
                 }))
-                setBackgroundResource(R.drawable.bg_input_pill)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(8) })
+                ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { if (label != "All") marginEnd = dp(14) })
         }
-    }
 
-    /** 3-column stat tiles (mockup's statgrid): headline numbers + the alert rule. */
-    @SuppressLint("SetTextI18n")
-    private fun renderStats(d: HoldingDetail) {
-        val wrap = binding.layoutStats
-        wrap.removeAllViews()
         val dIdx = if (d.xirr != null && d.benchXirr != null) (d.xirr - d.benchXirr) * 100 else null
         val dInf = if (d.xirr != null && d.inflXirr != null) (d.xirr - d.inflXirr) * 100 else null
-        val rules = db.alertRules()
-        val own = rules["isin:${d.instrument.isin}"]
-        val alertPct = own ?: rules["bucket:${d.bucket.name}"] ?: rules["default"]
-            ?: PriceSyncWorker.DEFAULT_THRESHOLD
-
-        data class Cell(val k: String, val v: String, val color: Int?, val onTap: (() -> Unit)?)
         fun pp(v: Double?) = v?.let { "${if (it >= 0) "+" else ""}%.1f pp".format(it) } ?: "—"
-        val cells = listOf(
-            Cell("Invested", MoneyFmt.money(d.investedNow, ccy), null, null),
-            Cell("Value", MoneyFmt.money(d.valueNow, ccy), null, null),
-            Cell("XIRR", MoneyFmt.pct(d.xirr), null, null),
-            Cell("vs ${d.bucket.benchName}", pp(dIdx),
-                dIdx?.let { getColor(if (it >= 0) R.color.accent_green else R.color.accent_red) }, null),
-            Cell("vs ${d.bucket.cpi} CPI", pp(dInf),
-                dInf?.let { getColor(if (it >= 0) R.color.accent_green else R.color.accent_red) }, null),
-            Cell("Alert at", "±${trim(alertPct)}%", null) { promptAlertRule(d) },
-        )
+        fun tint(v: Double?) = v?.let {
+            getColor(if (it >= 0) R.color.accent_green else R.color.accent_red) }
+        binding.layoutReturnsTiles.removeAllViews()
+        statGrid(binding.layoutReturnsTiles, listOf(
+            Cell("vs ${d.bucket.benchName} (lifetime)", pp(dIdx), tint(dIdx)),
+            Cell("vs ${d.bucket.cpi} CPI (lifetime)", pp(dInf), tint(dInf)),
+        ), fullWidth = true)
+    }
+
+    private data class Cell(val k: String, val v: String, val color: Int? = null,
+                            val onTap: (() -> Unit)? = null)
+
+    /** 3-column stat tiles (mockup's statgrid) — shared by POSITION, RETURNS &
+     *  the facts grid. [fullWidth] lets a short row stretch to fill the line
+     *  instead of leaving ghost columns. */
+    private fun statGrid(wrap: LinearLayout, cells: List<Cell>, fullWidth: Boolean = false) {
         cells.chunked(3).forEach { rowCells ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                weightSum = 3f
+                weightSum = if (fullWidth) rowCells.size.toFloat() else 3f
             }
             rowCells.forEachIndexed { i, c ->
                 val tile = LinearLayout(this).apply {
@@ -389,12 +492,235 @@ class HoldingDetailActivity : AppCompatActivity() {
                 row.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                     .apply { if (i < rowCells.size - 1) marginEnd = dp(8) })
             }
-            binding.layoutStats.addView(row, LinearLayout.LayoutParams(
+            wrap.addView(row, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { bottomMargin = dp(8) })
         }
-        // keep column widths when the last row is short
-        wrap.requestLayout()
+    }
+
+    /**
+     * The value-investing basics (Screener/Morningstar-style, not trading
+     * noise): where today's price sits in the 52-week range, then the core
+     * ratios. 52W comes from Yahoo when cached (true intraday extremes),
+     * else from the stored daily closes — so it renders even offline.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun renderFundamentals(d: HoldingDetail) {
+        val f = fund
+        var lo = Double.MAX_VALUE; var hi = 0.0
+        val from = d.days.last() - 365
+        for (k in d.days.indices) {
+            if (d.days[k] < from) continue
+            val v = d.price[k]
+            if (!v.isNaN() && v > 0) { if (v < lo) lo = v; if (v > hi) hi = v }
+        }
+        val yahooOk = d.instrument.isin != "GOLD" && f != null &&
+            f.low52 != null && f.high52 != null && f.high52 > f.low52
+        val low = if (yahooOk) f!!.low52 else lo.takeIf { it != Double.MAX_VALUE }
+        val high = if (yahooOk) f!!.high52 else hi.takeIf { it > 0 }
+
+        val cur = curPrice(d)
+        if (low != null && high != null && high > low) {
+            binding.rangeBar.visibility = View.VISIBLE
+            binding.tvFundNote.visibility = View.VISIBLE
+            binding.rangeBar.set(low, high, cur, color) { MoneyFmt.price(it, ccy) }
+            binding.tvFundNote.text = when {
+                cur >= high * 0.995 -> "trading at its 52-week high"
+                cur <= low * 1.005 -> "trading at its 52-week low"
+                else -> "%.1f%% below 52W high · %.1f%% above 52W low"
+                    .format((1 - cur / high) * 100, (cur / low - 1) * 100)
+            }
+        } else {
+            binding.rangeBar.visibility = View.GONE
+            binding.tvFundNote.visibility = View.GONE
+        }
+
+        val cells = buildList {
+            f?.marketCap?.takeIf { it > 0 }?.let { add(Cell("Mkt cap", MoneyFmt.cap(it, ccy))) }
+            f?.pe?.takeIf { it > 0 }?.let { add(Cell("P/E (TTM)", "%.1f".format(it))) }
+            f?.pb?.takeIf { it > 0 }?.let { add(Cell("P/B", "%.2f".format(it))) }
+            f?.eps?.let { add(Cell("EPS (TTM)", MoneyFmt.price(it, ccy))) }
+            f?.bookValue?.takeIf { it > 0 }?.let { add(Cell("Book value", MoneyFmt.price(it, ccy))) }
+            f?.divYield?.takeIf { it > 0 }?.let { add(Cell("Div yield", "%.2f%%".format(it * 100))) }
+            f?.roe?.let { add(Cell("ROE", "%.1f%%".format(it * 100))) }
+            f?.debtToEquity?.let { add(Cell("Debt/equity", "%.2f".format(it))) }
+        }
+        binding.layoutFund.removeAllViews()
+        binding.layoutFund.visibility = if (cells.isEmpty()) View.GONE else View.VISIBLE
+        if (cells.isNotEmpty()) statGrid(binding.layoutFund, cells)
+
+        binding.tvFundMeta.text = when {
+            f != null -> "Yahoo · ${age(f.fetchedAt)}"
+            else -> "52W from price history"
+        }
+        renderValuation(d)
+    }
+
+    /**
+     * VALUATION — the classic value-investing checks, each an independent lens
+     * on today's price rather than one fake-precise "fair value":
+     *  · Graham number √(22.5·EPS·book): the defensive-investor ceiling
+     *    (P/E ≤ 15 and P/B ≤ 1.5 combined). Conservative for asset-light
+     *    businesses, so it's one lens, not the verdict.
+     *  · Earnings yield (EPS ÷ price) against the 10Y government bond — is
+     *    the business out-earning the risk-free alternative?
+     *  · PEG (P/E ÷ expected growth): Lynch's growth-adjusted price tag.
+     *  · Street 12-month mean target — opinion, shown last as a reference.
+     * Only renders for things with earnings (stocks); funds/ETFs/gold hide it.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun renderValuation(d: HoldingDetail) {
+        val f = fund
+        val cur = curPrice(d)
+        data class Check(val title: String, val sub: String, val value: String,
+                         val chip: String, val up: Boolean?, val isOpinion: Boolean = false)
+        val rows = buildList {
+            if (f == null || d.instrument.isin == "GOLD" || cur <= 0) return@buildList
+            f.grahamNumber?.let { g ->
+                val gap = (cur / g - 1) * 100
+                add(Check("Graham number", "√(22.5 × EPS × book) — defensive ceiling",
+                    MoneyFmt.price(g, ccy),
+                    if (gap >= 0) "price %.0f%% above".format(gap)
+                    else "price %.0f%% below".format(-gap),
+                    gap < 0))
+            }
+            f.earningsYield(cur)?.let { ey ->
+                val bond = com.offlineupi.app.portfolio.Fundamentals.tenYearYield(ccy)
+                add(Check("Earnings yield", "EPS ÷ price, vs the 10-year govt bond",
+                    "%.1f%%".format(ey * 100),
+                    "10Y ≈ %.1f%%".format(bond * 100),
+                    when { ey >= bond -> true; ey >= bond * 0.6 -> null; else -> false }))
+            }
+            f.peg?.let { peg ->
+                add(Check("PEG ratio", "P/E ÷ expected earnings growth",
+                    "%.2f".format(peg),
+                    when { peg < 1 -> "cheap for its growth"
+                        peg <= 2 -> "fair for its growth"
+                        else -> "rich for its growth" },
+                    when { peg < 1 -> true; peg <= 2 -> null; else -> false }))
+            }
+            f.targetMean?.takeIf { it > 0 }?.let { t ->
+                val up = (t / cur - 1) * 100
+                add(Check("Street target",
+                    "12-month mean" + (f.analystCount?.let { " · $it analysts" } ?: ""),
+                    MoneyFmt.price(t, ccy),
+                    "${MoneyFmt.signedPct(up)} vs price", up >= 0, isOpinion = true))
+            }
+        }
+        // the merged section is titled by what it can show: judgment when the
+        // checks exist (stocks), plain facts otherwise (funds/ETFs/gold)
+        binding.tvFundTitle.text = if (rows.isEmpty()) "FUNDAMENTALS" else "VALUATION"
+        binding.layoutVal.removeAllViews()
+        binding.tvValNote.visibility = if (rows.isEmpty()) View.GONE else View.VISIBLE
+        if (rows.isEmpty()) return
+
+        // headline reads the value checks only — analyst targets are opinion.
+        // Tinted banner: the verdict is the payoff, it shouldn't whisper.
+        val checks = rows.filter { !it.isOpinion }
+        val cheap = checks.count { it.up == true }
+        val rich = checks.count { it.up == false }
+        val verdict: Boolean? = when {
+            checks.isEmpty() -> null
+            rich > cheap -> false
+            cheap > rich -> true
+            else -> null
+        }
+        binding.tvValNote.text = when {
+            checks.isEmpty() -> "not enough data for the value checks"
+            rich > cheap -> "${rich} of ${checks.size} value checks read the price as expensive"
+            cheap > rich -> "${cheap} of ${checks.size} value checks read the price as cheap"
+            else -> "the value checks are mixed at today's price"
+        }
+        binding.tvValNote.setBackgroundResource(R.drawable.bg_banner)
+        binding.tvValNote.background.mutate().setTint(getColor(when (verdict) {
+            true -> R.color.banner_good
+            false -> R.color.banner_bad
+            null -> R.color.card_raised
+        }))
+        binding.tvValNote.setTextColor(getColor(when (verdict) {
+            true -> R.color.accent_green
+            false -> R.color.accent_red
+            null -> R.color.text_secondary
+        }))
+
+        val wrap = binding.layoutVal
+        for (r in rows) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.bg_detail_group)
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+            }
+            val left = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            left.addView(TextView(this).apply {
+                text = r.title
+                textSize = 13f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setTextColor(getColor(R.color.text_primary))
+            })
+            left.addView(TextView(this).apply {
+                text = r.sub
+                textSize = 10.5f
+                setTextColor(getColor(R.color.text_secondary))
+            })
+            row.addView(left, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val right = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.END
+            }
+            right.addView(TextView(this).apply {
+                text = r.value
+                textSize = 13.5f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setTextColor(getColor(R.color.text_primary))
+            })
+            right.addView(TextView(this).apply {
+                text = r.chip
+                textSize = 10.5f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                setTextColor(getColor(when (r.up) {
+                    true -> R.color.accent_green
+                    false -> R.color.accent_red
+                    null -> R.color.text_secondary
+                }))
+            })
+            row.addView(right)
+            wrap.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dp(8) })
+        }
+    }
+
+    private fun age(ts: Long): String {
+        val mins = (System.currentTimeMillis() - ts) / 60_000
+        return when {
+            mins < 1 -> "just now"
+            mins < 60 -> "${mins}m ago"
+            mins < 48 * 60 -> "${mins / 60}h ago"
+            else -> "${mins / 1440}d ago"
+        }
+    }
+
+    /** POSITION: the money facts the header doesn't already show — net
+     *  invested, lifetime P&L (incl. realised, since invested nets out sells),
+     *  and the alert rule (the "›" marks the one tappable tile). */
+    @SuppressLint("SetTextI18n")
+    private fun renderStats(d: HoldingDetail) {
+        val wrap = binding.layoutStats
+        wrap.removeAllViews()
+        val rules = db.alertRules()
+        val own = rules["isin:${d.instrument.isin}"]
+        val alertPct = own ?: rules["bucket:${d.bucket.name}"] ?: rules["default"]
+            ?: PriceSyncWorker.DEFAULT_THRESHOLD
+
+        val pnl = d.valueNow - d.investedNow
+        statGrid(wrap, listOf(
+            Cell("Invested", MoneyFmt.money(d.investedNow, ccy)),
+            Cell("P&L (lifetime)",
+                (if (pnl >= 0) "+" else "−") + MoneyFmt.money(abs(pnl), ccy),
+                getColor(if (pnl >= 0) R.color.accent_green else R.color.accent_red)),
+            Cell("Alert at", "±${trim(alertPct)}% ›", null) { promptAlertRule(d) },
+        ))
     }
 
     private fun promptAlertRule(d: HoldingDetail) {

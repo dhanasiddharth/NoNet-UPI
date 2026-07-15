@@ -97,7 +97,9 @@ class TransactionHistoryActivity : AppCompatActivity() {
                     t.rrn?.contains(q) == true)
         }
         binding.tvEmpty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
-        binding.rvTransactions.adapter = FeedAdapter(buildFeedItems(filtered)) { txn ->
+        // day totals come from the FULL history — a search/status filter must
+        // not shrink what reads as "spent that day"
+        binding.rvTransactions.adapter = FeedAdapter(buildFeedItems(filtered, all)) { txn ->
             startActivity(Intent(this, TransactionReceiptActivity::class.java).apply {
                 putExtra(TransactionReceiptActivity.EXTRA_TRANSACTION_ID, txn.id)
             })

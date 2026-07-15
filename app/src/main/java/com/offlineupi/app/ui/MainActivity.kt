@@ -97,6 +97,13 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Coming to the foreground: refresh prices if they've gone stale (>1h).
+        // The worker self-guards on age, so this is cheap to call every time.
+        PriceSyncWorker.syncIfStale(this)
+    }
+
     fun bottomNav(): BottomNavigationView = binding.bottomNav
 
     /** Switch to the Bank tab programmatically (e.g. from the balance pill). */

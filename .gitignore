@@ -42,3 +42,6 @@ docs/design/portfolio_seed.json
 docs/design/design_data.json
 docs/design/design_data.js
 docs/design/market_data.json
+
+# Cloudflare wrangler cache (fieldcam preview deploys)
+.wrangler/

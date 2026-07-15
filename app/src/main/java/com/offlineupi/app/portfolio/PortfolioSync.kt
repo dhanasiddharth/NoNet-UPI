@@ -136,7 +136,128 @@ class PortfolioSync(private val context: Context, private val db: PortfolioDb) {
         return bars.size
     }
 
-    private fun httpGet(url: String): String {
+    // ---- fundamentals (quoteSummary sits behind Yahoo's cookie+crumb) ----
+
+    /**
+     * Raw quoteSummary result JSON (summaryDetail, defaultKeyStatistics,
+     * financialData, earningsTrend) for one symbol, or null when Yahoo balks —
+     * callers treat absence as "no fundamentals", never an error. A stale
+     * crumb gets one fresh retry.
+     */
+    fun fetchFundamentals(symbol: String): String? {
+        for (attempt in 0..1) {
+            val (cookie, crumb) = yahooAuth(fresh = attempt > 0) ?: return null
+            try {
+                val enc = URLEncoder.encode(symbol, "UTF-8")
+                val body = httpGet(
+                    "https://query1.finance.yahoo.com/v10/finance/quoteSummary/$enc" +
+                        "?modules=summaryDetail,defaultKeyStatistics,financialData,earningsTrend&crumb=" +
+                        URLEncoder.encode(crumb, "UTF-8"),
+                    cookie
+                )
+                return org.json.JSONObject(body).getJSONObject("quoteSummary")
+                    .optJSONArray("result")?.optJSONObject(0)?.toString()
+            } catch (e: Exception) {
+                if (attempt == 1) return null   // fresh crumb also failed — give up quietly
+            }
+        }
+        return null
+    }
+
+    /** Cookie+crumb pair, cached ~12h: any Yahoo hit sets the cookie (the 404
+     *  from fc.yahoo.com is expected), then getcrumb exchanges it for a crumb. */
+    private fun yahooAuth(fresh: Boolean = false): Pair<String, String>? {
+        if (!fresh) {
+            val c = prefs.getString("yahooCookie", null)
+            val k = prefs.getString("yahooCrumb", null)
+            val at = prefs.getLong("yahooAuthAt", 0)
+            if (c != null && k != null &&
+                System.currentTimeMillis() - at < 12 * 3_600_000L) return c to k
+        }
+        return try {
+            val cookie = mintCookie() ?: mintCookieDirect() ?: return null
+            val crumb = httpGet("https://query1.finance.yahoo.com/v1/test/getcrumb", cookie).trim()
+            if (crumb.isBlank() || crumb.startsWith("<")) return null
+            prefs.edit().putString("yahooCookie", cookie).putString("yahooCrumb", crumb)
+                .putLong("yahooAuthAt", System.currentTimeMillis()).apply()
+            cookie to crumb
+        } catch (_: Exception) { null }
+    }
+
+    /** Normal path: one GET to fc.yahoo.com (the 404 is expected) sets the cookie. */
+    private fun mintCookie(): String? = try {
+        val conn = URL("https://fc.yahoo.com").openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = false
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 15_000
+        conn.setRequestProperty("User-Agent", USER_AGENT)
+        conn.responseCode
+        val cookie = conn.headerFields.entries
+            .firstOrNull { it.key?.equals("Set-Cookie", ignoreCase = true) == true }
+            ?.value?.mapNotNull { it?.substringBefore(';')?.trim() }
+            ?.filter { it.isNotBlank() }?.joinToString("; ")
+        conn.disconnect()
+        cookie?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) { null }
+
+    /**
+     * fc.yahoo.com sits on common ad-block DNS lists (it's a tracker domain
+     * that happens to mint Yahoo's auth cookie), so home resolvers often
+     * sinkhole it to 127.0.0.1. Fallback: resolve it upstream over DoH and
+     * speak TLS to the real edge ourselves — SNI set to the hostname and the
+     * certificate verified against it, so this is the same handshake the
+     * normal path would have done.
+     */
+    private fun mintCookieDirect(): String? {
+        return try {
+            val ip = dohResolve("fc.yahoo.com") ?: return null
+            val sf = javax.net.ssl.SSLSocketFactory.getDefault()
+            (sf.createSocket() as javax.net.ssl.SSLSocket).use { s ->
+                s.connect(java.net.InetSocketAddress(ip, 443), 15_000)
+                s.soTimeout = 15_000
+                s.sslParameters = s.sslParameters.apply {
+                    serverNames = listOf(javax.net.ssl.SNIHostName("fc.yahoo.com"))
+                }
+                s.startHandshake()
+                if (!javax.net.ssl.HttpsURLConnection.getDefaultHostnameVerifier()
+                        .verify("fc.yahoo.com", s.session)) return null
+                s.outputStream.write(("GET / HTTP/1.1\r\nHost: fc.yahoo.com\r\n" +
+                    "User-Agent: $USER_AGENT\r\nConnection: close\r\n\r\n").toByteArray())
+                s.outputStream.flush()
+                s.inputStream.bufferedReader().lineSequence()
+                    .takeWhile { it.isNotBlank() }
+                    .filter { it.startsWith("set-cookie:", ignoreCase = true) }
+                    .map { it.substringAfter(':').substringBefore(';').trim() }
+                    .filter { it.isNotBlank() }
+                    .joinToString("; ").ifBlank { null }
+            }
+        } catch (_: Exception) { null }
+    }
+
+    /** First IPv4 answer for [host] from Cloudflare/Google DoH, sinkholes rejected. */
+    private fun dohResolve(host: String): String? = listOf(
+        "https://cloudflare-dns.com/dns-query?name=$host&type=A",
+        "https://dns.google/resolve?name=$host&type=A",
+    ).firstNotNullOfOrNull { u ->
+        try {
+            val conn = URL(u).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.setRequestProperty("Accept", "application/dns-json")
+            val body = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+            val ans = org.json.JSONObject(body).optJSONArray("Answer")
+            (0 until (ans?.length() ?: 0)).asSequence()
+                .map { ans!!.getJSONObject(it) }
+                .filter { it.optInt("type") == 1 }
+                .map { it.optString("data") }
+                .firstOrNull {
+                    it.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) &&
+                        !it.startsWith("127.") && it != "0.0.0.0"
+                }
+        } catch (_: Exception) { null }
+    }
+
+    private fun httpGet(url: String, cookie: String? = null): String {
         var current = url
         repeat(5) {
             val conn = URL(current).openConnection() as HttpURLConnection
@@ -145,7 +266,8 @@ class PortfolioSync(private val context: Context, private val db: PortfolioDb) {
             conn.instanceFollowRedirects = false
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) Finance/2.0")
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            cookie?.let { conn.setRequestProperty("Cookie", it) }
             val code = conn.responseCode
             if (code in 300..399) {
                 current = conn.getHeaderField("Location") ?: error("redirect without location")
@@ -156,5 +278,9 @@ class PortfolioSync(private val context: Context, private val db: PortfolioDb) {
             return conn.inputStream.bufferedReader().use(BufferedReader::readText)
         }
         error("too many redirects")
+    }
+
+    private companion object {
+        const val USER_AGENT = "Mozilla/5.0 (Android) Finance/2.0"
     }
 }
